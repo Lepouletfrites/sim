@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Simulation urbaine 2D procédurale et interactive en Vanilla JavaScript.">
+  <meta name="description" content="Simulation urbaine 2D procédurale : routines quotidiennes, lieux publics et propagation d'une épidémie, en Vanilla JavaScript.">
   <title>CitySim</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -11,7 +11,10 @@
   <div class="app">
     <main class="viewport" id="viewport">
       <canvas id="city-canvas" aria-label="Carte de la ville simulée"></canvas>
-      <div class="pause-badge" id="pause-badge" hidden>EN PAUSE</div>
+      <div class="hud">
+        <div class="hud__clock"><span id="hud-sky" aria-hidden="true">☀</span> <span id="hud-clock">Lundi 06:00</span> · <span id="hud-day">Jour 0</span></div>
+        <div class="hud__badge" id="pause-badge" hidden>EN PAUSE</div>
+      </div>
     </main>
 
     <aside class="sidebar">
@@ -46,16 +49,18 @@
       <section class="panel">
         <h2 class="panel__title">Temps</h2>
         <div class="btn-group" role="group" aria-label="Vitesse de simulation">
-          <button type="button" class="btn-toggle" data-scale="0">Pause</button>
+          <button type="button" class="btn-toggle" data-scale="0" aria-label="Pause">❚❚</button>
           <button type="button" class="btn-toggle" data-scale="1">x1</button>
-          <button type="button" class="btn-toggle" data-scale="2">x2</button>
           <button type="button" class="btn-toggle" data-scale="5">x5</button>
+          <button type="button" class="btn-toggle" data-scale="10">x10</button>
+          <button type="button" class="btn-toggle" data-scale="25">x25</button>
+          <button type="button" class="btn-toggle" data-scale="50">x50</button>
         </div>
-        <p class="hint"><kbd>Espace</kbd> pause · <kbd>1</kbd> <kbd>2</kbd> <kbd>5</kbd> vitesse</p>
+        <p class="hint"><kbd>Espace</kbd> pause · <kbd>1</kbd>–<kbd>5</kbd> vitesses · 1 jour ≈ 19 s à x10</p>
       </section>
 
       <section class="panel">
-        <h2 class="panel__title">Paramètres</h2>
+        <h2 class="panel__title">Ville</h2>
 
         <label class="control" for="slider-population">
           <span class="control__row">
@@ -72,12 +77,126 @@
           </span>
           <input type="range" id="slider-density">
         </label>
+
+        <button type="button" class="btn-primary" id="btn-regenerate">Régénérer la ville</button>
       </section>
 
-      <button type="button" class="btn-primary" id="btn-regenerate">Régénérer la ville</button>
+      <section class="panel">
+        <h2 class="panel__title">Épidémie</h2>
+
+        <ul class="legend">
+          <li><i class="dot" data-health="0"></i>Sains<b id="stat-susceptible">0</b></li>
+          <li><i class="dot" data-health="1"></i>Porteurs sans symptômes<b id="stat-carriers">0</b></li>
+          <li><i class="dot" data-health="2"></i>Malades qui continuent leur vie<b id="stat-sickOut">0</b></li>
+          <li><i class="dot dot--ring dot--ring-hospital" data-health="2"></i>En route vers l'hôpital<b id="stat-toHospital">0</b></li>
+          <li><i class="swatch" data-place="hospital"></i>Hospitalisés<b id="stat-hospitalized">0</b></li>
+          <li><i class="dot dot--ring dot--ring-home" data-health="2"></i>En quarantaine chez eux<b id="stat-quarantined">0</b></li>
+          <li><i class="swatch" data-place="home"></i>Cas graves alités sans soins<b id="stat-bedridden">0</b></li>
+          <li><i class="dot" data-health="3"></i>Guéris (immunisés)<b id="stat-recovered">0</b></li>
+          <li><i class="dot dot--cross" data-health="4"></i>Décès<b id="stat-dead">0</b></li>
+        </ul>
+
+        <div class="kpis">
+          <div class="kpi">
+            <span class="kpi__label">Cas graves en cours</span>
+            <span class="kpi__value" id="stat-severe">0</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi__label">Létalité observée</span>
+            <span class="kpi__value" id="stat-lethality">0 %</span>
+          </div>
+        </div>
+
+        <div class="chart">
+          <canvas id="epidemic-chart" aria-label="Évolution de l'épidémie : décès, infectés, guéris et sains au fil des jours"></canvas>
+          <div class="chart__tooltip" id="chart-tooltip" hidden></div>
+        </div>
+
+        <label class="control" for="slider-transmission">
+          <span class="control__row">
+            <span>Transmission</span>
+            <output id="value-transmission">12 %</output>
+          </span>
+          <input type="range" id="slider-transmission">
+          <span class="control__help">Chance de contaminer par heure de contact rapproché, modulée par le lieu (voir plus bas)</span>
+        </label>
+
+        <label class="control" for="slider-virulence">
+          <span class="control__row">
+            <span>Virulence</span>
+            <output id="value-virulence">10 %</output>
+          </span>
+          <input type="range" id="slider-virulence">
+          <span class="control__help">Chance de forme grave × fragilité (seniors ≈ ×3, jeunes ≈ ×0,4). Un cas grave meurt dans 45 % des cas, 8 % à l'hôpital</span>
+        </label>
+
+        <div class="btn-row">
+          <button type="button" class="btn-secondary" id="btn-infect">Infecter un habitant</button>
+          <button type="button" class="btn-secondary" id="btn-reset-epidemic">Réinitialiser</button>
+        </div>
+        <p class="hint">Clic sur la carte : infecte l'habitant le plus proche · <kbd>I</kbd> infection aléatoire</p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">Comportements humains</h2>
+
+        <div class="meter">
+          <span class="control__row">
+            <span>Inquiétude collective</span>
+            <output id="value-awareness">0 %</output>
+          </span>
+          <div class="meter__track"><div class="meter__fill" id="meter-awareness"></div></div>
+          <span class="control__help">Monte avec les malades connus et les décès récents</span>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi">
+            <span class="kpi__label">Portent un masque</span>
+            <span class="kpi__value" id="stat-masked">0</span>
+          </div>
+          <div class="kpi">
+            <span class="kpi__label">Confinés volontaires</span>
+            <span class="kpi__value" id="stat-confined">0</span>
+          </div>
+        </div>
+
+        <label class="control" for="slider-responsibility">
+          <span class="control__row">
+            <span>Responsabilité</span>
+            <output id="value-responsibility">50 %</output>
+          </span>
+          <input type="range" id="slider-responsibility">
+          <span class="control__help">Part des malades qui s'isolent (forme légère) ou vont à l'hôpital (forme grave). Les autres vont travailler malades</span>
+        </label>
+
+        <label class="control" for="slider-prudence">
+          <span class="control__row">
+            <span>Prudence</span>
+            <output id="value-prudence">50 %</output>
+          </span>
+          <input type="range" id="slider-prudence">
+          <span class="control__help">Quand l'inquiétude monte : masques, distanciation, moins de sorties, confinement volontaire</span>
+        </label>
+
+        <p class="hint">Chaque habitant a son âge, son emploi, ses horaires, son civisme, sa prudence et sa sociabilité : deux personnes ne réagissent pas pareil.</p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">Lieux</h2>
+        <ul class="places" id="places-list"></ul>
+
+        <h3 class="panel__subtitle">Mesures sanitaires</h3>
+        <label class="check"><input type="checkbox" id="policy-closeNightclubs"> Fermer les boîtes de nuit</label>
+        <label class="check"><input type="checkbox" id="policy-closeCommerce"> Fermer commerces et restaurants</label>
+        <label class="check"><input type="checkbox" id="policy-telework"> Télétravail obligatoire</label>
+
+        <h3 class="panel__subtitle">Où se contamine-t-on ?</h3>
+        <ul class="bars" id="contagion-bars"></ul>
+        <p class="hint">Personne ne se contamine chez soi : seuls les contacts au travail, dans les lieux publics et, dans une moindre mesure, dans la rue transmettent le virus.</p>
+      </section>
 
       <footer class="sidebar__footer">
-        Vanilla JS · Canvas 2D · Spatial Hash Grid
+        Vanilla JS · Canvas 2D · Spatial Hash Grid · Flow Fields
       </footer>
     </aside>
   </div>

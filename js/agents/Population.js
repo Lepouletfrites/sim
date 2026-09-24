@@ -3,6 +3,7 @@ import { Random } from '../core/Random.js';
 import { SpatialHashGrid } from '../core/SpatialHashGrid.js';
 import { resolveCircleRect, clampToBounds } from '../physics/Collision.js';
 import { Citizen } from './Citizen.js';
+import { rollTraits } from './Traits.js';
 import { WanderBehavior } from './WanderBehavior.js';
 
 const COLLISION_PASSES = 2;
@@ -11,10 +12,11 @@ const COLLISION_PASSES = 2;
  * Ensemble des habitants et pas physique.
  *
  * Chaque pas fixe (1/60 s) :
- *  1. reconstruit la grille spatiale (O(N))
- *  2. décisions lentes pour les agents dont la minuterie est échue (multi-tick)
- *  3. séparation entre voisins proches (cases 3x3 uniquement) + pilotage
- *  4. intégration des positions et collisions contre les bâtiments
+ *  1. reconstruit la grille spatiale (O(N)) avec tous les vivants, dehors comme dedans
+ *  2. direction : champ de flux vers la destination (O(1)), errance dans la rue
+ *     (décisions lentes, multi-tick), ou flânerie à l'intérieur d'un bâtiment
+ *  3. séparation entre voisins proches du MÊME lieu (cases 3x3 uniquement)
+ *  4. intégration ; collisions contre les bâtiments dehors, murs intérieurs dedans
  */
 export class Population {
   constructor(city, seed) {
@@ -23,6 +25,7 @@ export class Population {
     this.citizens = [];
     this.nextId = 0;
     this.behavior = new WanderBehavior(city, this.rng);
+    this.routine = null; // branché par la Simulation
     this.grid = new SpatialHashGrid(
       city.width,
       city.height,
@@ -46,34 +49,66 @@ export class Population {
       const speed = this.rng.range(cfg.speedMin, cfg.speedMax);
       const { x, y } = this.city.randomSpawnPoint(this.rng, radius);
       const citizen = new Citizen(this.nextId++, x, y, radius, speed);
+      rollTraits(citizen, this.rng, this.city);
       this.behavior.initialize(citizen);
       this.citizens.push(citizen);
+      if (this.routine) this.routine.initialize(citizen);
     }
     if (this.citizens.length > count) this.citizens.length = count;
   }
 
   step(dt) {
     const cfg = CONFIG.citizens;
+    const { indoorSpeedFactor, indoorPause } = CONFIG.routine;
     const citizens = this.citizens;
     const n = citizens.length;
     const grid = this.grid;
     const neighbors = this.neighborBuffer;
+    const buildings = this.city.buildings;
 
     grid.clear();
-    for (let i = 0; i < n; i++) grid.insert(i, citizens[i].x, citizens[i].y);
+    for (let i = 0; i < n; i++) {
+      const c = citizens[i];
+      if (c.alive) grid.insert(i, c.x, c.y);
+    }
 
-    // --- Passe 1 : décisions + forces -> vitesses
+    // --- Passe 1 : direction + forces -> vitesses
     const steer = Math.min(1, cfg.steering * dt);
     for (let i = 0; i < n; i++) {
       const c = citizens[i];
+      if (!c.alive) continue;
       c.px = c.x;
       c.py = c.y;
 
-      c.turnCooldown -= dt;
-      c.decisionTimer -= dt;
-      if (c.decisionTimer <= 0) {
-        this.behavior.decide(c);
-        c.decisionTimer += this.behavior.nextDecisionDelay();
+      let speed = c.speed * c.speedFactor;
+      if (c.place >= 0) {
+        // Flânerie intérieure : aller à un point, s'y arrêter, repartir.
+        if (c.pause > 0) {
+          c.pause -= dt;
+          speed = 0;
+        } else {
+          const dx = c.tx - c.x;
+          const dy = c.ty - c.y;
+          const d = Math.hypot(dx, dy);
+          if (d < 2) {
+            c.pause = this.rng.range(indoorPause[0], indoorPause[1]);
+            this.routine.pickIndoorTarget(c);
+            speed = 0;
+          } else {
+            c.dirX = dx / d;
+            c.dirY = dy / d;
+            speed *= indoorSpeedFactor;
+          }
+        }
+      } else {
+        c.turnCooldown -= dt;
+        c.decisionTimer -= dt;
+        if (c.field !== null && c.field.steer(c)) {
+          // Direction donnée par le champ de flux vers la destination.
+        } else if (c.decisionTimer <= 0) {
+          this.behavior.decide(c);
+          c.decisionTimer += this.behavior.nextDecisionDelay();
+        }
       }
 
       let fx = 0;
@@ -83,9 +118,11 @@ export class Population {
         const j = neighbors[k];
         if (j === i) continue;
         const o = citizens[j];
+        if (o.place !== c.place) continue; // un mur les sépare
         const dx = c.x - o.x;
         const dy = c.y - o.y;
-        const minDist = c.radius + o.radius + cfg.separationPadding;
+        // Les prudents gardent plus de distance (asymétrique : c'est eux qui s'écartent).
+        const minDist = c.radius + o.radius + cfg.separationPadding + c.extraSpace;
         const d2 = dx * dx + dy * dy;
         if (d2 >= minDist * minDist) continue;
 
@@ -106,12 +143,10 @@ export class Population {
         }
       }
 
-      const desiredVx = c.dirX * c.speed;
-      const desiredVy = c.dirY * c.speed;
-      c.vx += (desiredVx - c.vx) * steer + fx * cfg.separationStrength * dt;
-      c.vy += (desiredVy - c.vy) * steer + fy * cfg.separationStrength * dt;
+      c.vx += (c.dirX * speed - c.vx) * steer + fx * cfg.separationStrength * dt;
+      c.vy += (c.dirY * speed - c.vy) * steer + fy * cfg.separationStrength * dt;
 
-      const maxSpeed = c.speed * cfg.maxSpeedFactor;
+      const maxSpeed = c.speed * c.speedFactor * cfg.maxSpeedFactor;
       const v2 = c.vx * c.vx + c.vy * c.vy;
       if (v2 > maxSpeed * maxSpeed) {
         const k = maxSpeed / Math.sqrt(v2);
@@ -122,25 +157,44 @@ export class Population {
 
     // --- Passe 2 : intégration + collisions
     const city = this.city;
-    const buildings = this.buildingBuffer;
+    const nearby = this.buildingBuffer;
     for (let i = 0; i < n; i++) {
       const c = citizens[i];
+      if (!c.alive) continue;
       c.x += c.vx * dt;
       c.y += c.vy * dt;
 
+      if (c.place >= 0) {
+        this.keepInside(c, buildings[c.place]);
+        continue;
+      }
+
       for (let pass = 0; pass < COLLISION_PASSES; pass++) {
-        const count = city.getBuildingsNear(c.x, c.y, c.radius, buildings);
+        const count = city.getBuildingsNear(c.x, c.y, c.radius, nearby);
         let hit = false;
         for (let k = 0; k < count; k++) {
-          if (resolveCircleRect(c, buildings[k])) hit = true;
+          if (resolveCircleRect(c, nearby[k])) hit = true;
         }
         if (!hit) break;
       }
       clampToBounds(c, city.width, city.height);
 
-      const stuckSpeed = c.speed * cfg.stuckSpeedRatio;
+      const stuckSpeed = c.speed * c.speedFactor * cfg.stuckSpeedRatio;
       if (c.vx * c.vx + c.vy * c.vy < stuckSpeed * stuckSpeed) c.stuckTimer += dt;
       else c.stuckTimer = 0;
     }
+  }
+
+  /** Les murs d'un bâtiment, vus de l'intérieur. */
+  keepInside(c, b) {
+    const r = c.radius;
+    const minX = b.x + r;
+    const maxX = b.x + b.w - r;
+    const minY = b.y + r;
+    const maxY = b.y + b.h - r;
+    if (c.x < minX) { c.x = minX; if (c.vx < 0) c.vx = 0; }
+    else if (c.x > maxX) { c.x = maxX; if (c.vx > 0) c.vx = 0; }
+    if (c.y < minY) { c.y = minY; if (c.vy < 0) c.vy = 0; }
+    else if (c.y > maxY) { c.y = maxY; if (c.vy > 0) c.vy = 0; }
   }
 }

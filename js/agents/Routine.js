@@ -1,0 +1,296 @@
+import { CONFIG } from '../config.js';
+import { Random } from '../core/Random.js';
+import { PlaceType, isOpen } from '../world/PlaceTypes.js';
+import { Care, Health } from './Citizen.js';
+
+/**
+ * Emploi du temps des habitants (décisions lentes, 4 fois par seconde simulée).
+ *
+ * Chaque habitant a une activité (dormir, travailler, faire les courses...)
+ * associée à un lieu et une heure de fin. Quand elle se termine, ou quand
+ * son lieu ferme, on en planifie une nouvelle selon :
+ *  - l'heure et le jour (sommeil, horaires de travail, ouverture des lieux)
+ *  - son profil (âge, emploi, sociabilité)
+ *  - sa santé et sa prudence (quarantaine, confinement, moins de sorties)
+ *  - les mesures sanitaires (fermetures, télétravail)
+ */
+export class Routine {
+  constructor(population, city, clock, settings, seed) {
+    this.population = population;
+    this.city = city;
+    this.clock = clock;
+    this.settings = settings;
+    this.rng = new Random(seed ^ 0x68e31da4);
+    this.awareness = 0;       // tenu à jour par l'Epidemic
+    this.onEnter = null;      // callback (citoyen, bâtiment) à l'entrée d'un bâtiment
+    this.occupancy = new Uint16Array(city.buildings.length);
+    this.openCache = new Map();
+  }
+
+  isOpen(type) {
+    let open = this.openCache.get(type);
+    if (open === undefined) {
+      open = isOpen(type, this.clock, this.settings);
+      this.openCache.set(type, open);
+    }
+    return open;
+  }
+
+  /** Premier placement : chacun démarre chez soi. */
+  initialize(c) {
+    if (c.home >= 0) this.enter(c, c.home, true);
+    this.replan(c);
+  }
+
+  // ------------------------------------------------------------------ Tick
+
+  tick() {
+    const cfg = CONFIG.routine;
+    const now = this.clock.time;
+    const city = this.city;
+    this.openCache.clear();
+    this.recountOccupancy();
+
+    for (const c of this.population.citizens) {
+      if (!c.alive) continue;
+
+      if (c.place >= 0) {
+        const type = city.buildings[c.place].type;
+        if (now >= c.activityEnd || !this.isOpen(type)) this.replan(c);
+      } else if (c.destination >= 0) {
+        const arrived = c.field.distanceTo(c) <= c.radius + cfg.arriveMargin;
+        if (arrived || now - c.travelStart > cfg.maxTravel) this.arrive(c);
+      } else if (now >= c.activityEnd) {
+        this.replan(c);
+      }
+    }
+  }
+
+  recountOccupancy() {
+    const occupancy = this.occupancy;
+    occupancy.fill(0);
+    for (const c of this.population.citizens) {
+      if (c.alive && c.place >= 0) occupancy[c.place]++;
+    }
+  }
+
+  // -------------------------------------------------------------- Planification
+
+  replan(c) {
+    const plan = this.plan(c);
+    c.activity = plan.activity;
+    c.activityEnd = plan.until;
+    this.goTo(c, plan.building);
+  }
+
+  plan(c) {
+    const cfg = CONFIG.routine;
+    const clock = this.clock;
+    const rng = this.rng;
+    const s = this.settings;
+    const h = clock.hour;
+    const now = clock.time;
+    const city = this.city;
+
+    // 1. Contraintes sanitaires
+    switch (c.care) {
+      case Care.HOSPITAL:
+        if (city.hospitalIndex >= 0) return { building: city.hospitalIndex, until: Infinity, activity: 'hospital' };
+        break;
+      case Care.QUARANTINE:
+        return { building: c.home, until: Infinity, activity: 'quarantine' };
+      case Care.BEDRIDDEN:
+        return { building: c.home, until: Infinity, activity: 'bedridden' };
+      case Care.CONFINED:
+        return { building: c.home, until: c.careUntil, activity: 'confined' };
+      default:
+    }
+
+    // Envie de sortir : freinée par la prudence face à l'inquiétude, et par la maladie.
+    const sick = c.health === Health.SYMPTOMATIC;
+    const mood = (1 - s.prudence * this.awareness * c.caution) * (sick ? cfg.sickLeisureFactor : 1);
+
+    // 2. Nuit : dormir, ou sortir en boîte pour les couche-tard
+    if (!this.isAwake(c, h)) {
+      if (c.nightOwl && this.isOpen(PlaceType.NIGHTCLUB) && rng.chance(cfg.nightclubChance * c.sociability * mood)) {
+        const club = this.pickNear(PlaceType.NIGHTCLUB, c);
+        if (club >= 0) return { building: club, until: clock.next(rng.range(3, 5)), activity: 'nightclub' };
+      }
+      return { building: c.home, until: clock.next(c.wake), activity: 'sleep' };
+    }
+
+    // 3. Travail (le présentéisme existe : un malade qui s'ignore y va quand même)
+    const workday = clock.weekday < 5 || (clock.weekday === 5 && c.worksSaturday);
+    const hasWork = c.work >= 0 && workday;
+    const leaveAt = c.workStart - cfg.commuteLead; // on part un peu avant pour arriver à l'heure
+    if (hasWork && h >= leaveAt && h < c.workEnd) {
+      const end = clock.next(c.workEnd);
+      if (s.telework) return { building: c.home, until: end, activity: 'telework' };
+      if (h >= 12 && h < 13 && this.isOpen(PlaceType.RESTAURANT) && rng.chance(cfg.lunchOut * mood)) {
+        const resto = this.pickNear(PlaceType.RESTAURANT, c);
+        if (resto >= 0) return { building: resto, until: Math.min(clock.next(13), end), activity: 'lunch' };
+      }
+      // Pause à midi pour laisser le choix du déjeuner
+      const until = h < 12 ? Math.min(clock.next(12), end) : end;
+      return { building: c.work, until, activity: 'work' };
+    }
+
+    // 4. Temps libre, qui s'arrête à temps pour partir travailler
+    const plan = this.leisure(c, mood);
+    if (hasWork && h < leaveAt) plan.until = Math.min(plan.until, clock.next(leaveAt));
+    return plan;
+  }
+
+  /**
+   * Choisit un lieu d'un type donné parmi quelques candidats, en privilégiant le plus
+   * proche : on va rarement au restaurant à l'autre bout de la ville.
+   */
+  pickNear(type, c) {
+    let best = -1;
+    let bestD2 = Infinity;
+    for (let k = 0; k < CONFIG.routine.venueCandidates; k++) {
+      const i = this.city.pickPlace(type, this.rng);
+      if (i < 0) return -1;
+      const b = this.city.buildings[i];
+      const d2 = (b.x + b.w / 2 - c.x) ** 2 + (b.y + b.h / 2 - c.y) ** 2;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        best = i;
+      }
+    }
+    return best;
+  }
+
+  leisure(c, mood) {
+    const { leisure } = CONFIG.routine;
+    const clock = this.clock;
+    const rng = this.rng;
+    const weekend = clock.isWeekend;
+    const social = 0.5 + c.sociability;
+    const sick = c.health === Health.SYMPTOMATIC;
+    const evening = clock.hour >= 20 || clock.hour < 7; // on flâne peu une fois la nuit tombée
+
+    const options = [
+      ['home', leisure.home.weight * (c.age === 'senior' ? 1.5 : 1) * (sick ? 2 : 1)],
+      ['walk', leisure.walk.weight * mood * (weekend ? 1.5 : 1) * (evening ? 0.2 : 1)],
+    ];
+    if (this.isOpen(PlaceType.MALL)) {
+      options.push(['mall', leisure.mall.weight * mood * social * (weekend ? 2 : 1)]);
+    }
+    if (this.isOpen(PlaceType.RESTAURANT)) {
+      options.push(['restaurant', leisure.restaurant.weight * mood * social]);
+    }
+
+    let total = 0;
+    for (const [, w] of options) total += w;
+    let r = rng.next() * total;
+    let choice = 'home';
+    for (const [name, w] of options) {
+      if ((r -= w) <= 0) {
+        choice = name;
+        break;
+      }
+    }
+
+    const [min, max] = leisure[choice].duration;
+    const until = Math.min(clock.time + rng.range(min, max), clock.next(c.bedtime));
+    const building =
+      choice === 'home' ? c.home
+        : choice === 'walk' ? -1
+          : this.pickNear(choice, c);
+    return { building, until, activity: choice };
+  }
+
+  isAwake(c, h) {
+    if (c.bedtime > 24) return h >= c.wake || h < c.bedtime - 24;
+    return h >= c.wake && h < c.bedtime;
+  }
+
+  // ---------------------------------------------------------------- Déplacements
+
+  /** Se diriger vers un bâtiment (-1 = se promener dans la rue). */
+  goTo(c, building) {
+    if (building >= 0 && building === c.place) {
+      c.destination = -1;
+      c.field = null;
+      return;
+    }
+    if (c.place >= 0) this.leave(c);
+
+    const field = building >= 0 ? this.city.fieldTo(building) : null;
+    c.destination = field ? building : -1;
+    c.field = field;
+    c.travelStart = this.clock.time;
+  }
+
+  arrive(c) {
+    const b = c.destination;
+    const building = this.city.buildings[b];
+    if (!this.isOpen(building.type)) {
+      // Fermé entre-temps : on change de programme.
+      this.replan(c);
+      return;
+    }
+    if (this.occupancy[b] >= building.capacity) {
+      // Complet : on flâne un moment avant de réessayer (ou de faire autre chose).
+      const [min, max] = CONFIG.routine.retryDelay;
+      c.destination = -1;
+      c.field = null;
+      c.activity = 'walk';
+      c.activityEnd = Math.min(this.clock.time + this.rng.range(min, max), this.clock.next(c.bedtime));
+      return;
+    }
+    this.enter(c, b);
+    this.occupancy[b]++;
+    if (this.onEnter) this.onEnter(c, b);
+  }
+
+  /** Entre dans un bâtiment : l'agent y reste visible et s'y déplace. */
+  enter(c, b, anywhere = false) {
+    const building = this.city.buildings[b];
+    const r = c.radius;
+    if (anywhere) {
+      c.x = this.rng.range(building.x + r, building.x + building.w - r);
+      c.y = this.rng.range(building.y + r, building.y + building.h - r);
+    } else {
+      c.x = Math.min(Math.max(c.x, building.x + r), building.x + building.w - r);
+      c.y = Math.min(Math.max(c.y, building.y + r), building.y + building.h - r);
+    }
+    c.px = c.x;
+    c.py = c.y;
+    c.vx = 0;
+    c.vy = 0;
+    c.place = b;
+    c.destination = -1;
+    c.field = null;
+    c.pause = 0;
+    this.pickIndoorTarget(c);
+  }
+
+  /** Sort par la porte la plus proche. */
+  leave(c) {
+    const field = this.city.fieldTo(c.place);
+    c.place = -1;
+    if (field) {
+      let best = field.exits[0];
+      let bestD2 = Infinity;
+      for (const exit of field.exits) {
+        const d2 = (exit.x - c.x) ** 2 + (exit.y - c.y) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = exit;
+        }
+      }
+      c.x = c.px = best.x;
+      c.y = c.py = best.y;
+    }
+    this.population.behavior.initialize(c);
+  }
+
+  pickIndoorTarget(c) {
+    const b = this.city.buildings[c.place];
+    const m = c.radius + 1;
+    c.tx = b.w > 2 * m ? this.rng.range(b.x + m, b.x + b.w - m) : b.x + b.w / 2;
+    c.ty = b.h > 2 * m ? this.rng.range(b.y + m, b.y + b.h - m) : b.y + b.h / 2;
+  }
+}

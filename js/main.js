@@ -30,7 +30,34 @@ const ui = new UI({
     state.seed = Random.randomSeed();
     buildWorld();
   },
+  onSetting: (name, value) => {
+    simulation.setSetting(name, value);
+    refreshStats();
+  },
+  onInfect: () => {
+    if (simulation.epidemic) simulation.epidemic.infectRandom();
+    refreshStats();
+  },
+  onResetEpidemic: () => {
+    if (simulation.epidemic) simulation.epidemic.reset();
+    refreshStats();
+  },
 });
+
+// Clic sur la carte : infecte l'habitant sain le plus proche.
+canvas.addEventListener('click', (event) => {
+  if (simulation.epidemic && simulation.epidemic.infectAt(event.offsetX, event.offsetY, 30)) {
+    refreshStats();
+  }
+});
+
+function refreshStats() {
+  ui.updateStats({
+    fps: loop.fps,
+    steps: simulation.lastSteps,
+    simulation,
+  });
+}
 
 function setTimeScale(scale) {
   if (scale > 0) state.lastActiveScale = scale;
@@ -46,6 +73,7 @@ function buildWorld() {
   simulation.load(city, ui.population, state.seed);
   renderer.setCity(city);
   ui.setCityInfo(city);
+  refreshStats();
 }
 
 // --- Redimensionnement : le canvas suit son conteneur, la ville est régénérée
@@ -73,16 +101,13 @@ const loop = new GameLoop({
     statsTimer += dt;
     if (statsTimer >= STATS_INTERVAL) {
       statsTimer = 0;
-      ui.updateStats({
-        population: simulation.population ? simulation.population.count : 0,
-        fps: loop.fps,
-        steps: simulation.lastSteps,
-      });
+      refreshStats();
     }
   },
   render() {
     const citizens = simulation.population ? simulation.population.citizens : null;
-    renderer.render(citizens, simulation.alpha);
+    renderer.render(citizens, simulation.alpha, simulation);
+    ui.updateClock(simulation.clock);
   },
 });
 

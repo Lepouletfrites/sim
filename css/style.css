@@ -48,21 +48,36 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  cursor: crosshair;
 }
 
-.pause-badge {
+.hud {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.hud__clock,
+.hud__badge {
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(21, 24, 28, 0.85);
   border: 1px solid var(--border);
-  color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__badge {
+  color: var(--text-muted);
   letter-spacing: 0.08em;
-  pointer-events: none;
+}
+
+.hud__badge[hidden] {
+  display: none;
 }
 
 .sidebar {
@@ -154,8 +169,13 @@ body {
 
 .btn-group {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.btn-group .btn-toggle {
+  font-size: 12px;
+  padding: 8px 0;
 }
 
 .btn-toggle,
@@ -198,8 +218,36 @@ body {
   background: var(--accent-strong);
 }
 
+.panel .btn-primary {
+  margin-top: 4px;
+}
+
+.btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.btn-secondary {
+  font: inherit;
+  font-size: 12px;
+  padding: 9px 6px;
+  cursor: pointer;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent);
+}
+
 .btn-toggle:focus-visible,
 .btn-primary:focus-visible,
+.btn-secondary:focus-visible,
 input[type="range"]:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -248,6 +296,298 @@ input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+.control__help {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---------- Épidémie ---------- */
+
+.legend {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend b {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend__sub {
+  padding-left: 14px;
+  color: var(--text-muted);
+}
+
+.dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.dot--ring {
+  box-shadow: 0 0 0 1.5px var(--bg-panel), 0 0 0 2.5px var(--ring-color, #fff);
+}
+
+.swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1.5px solid;
+}
+
+/* ---------- Lieux ---------- */
+
+.panel__subtitle {
+  margin: 16px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.places {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+}
+
+.places li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: 8px;
+  align-items: center;
+}
+
+.places .swatch {
+  grid-row: span 2;
+}
+
+.places__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.places__hours {
+  grid-column: 2;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.places b {
+  grid-row: span 2;
+  font-variant-numeric: tabular-nums;
+}
+
+.badge {
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge--open {
+  color: #7ee2a8;
+  background: rgba(46, 204, 113, 0.14);
+}
+
+.badge--closed {
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.bars li {
+  display: grid;
+  grid-template-columns: 96px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+}
+
+.bars__track {
+  height: 8px;
+  border-radius: 0 4px 4px 0;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.bars__fill {
+  height: 100%;
+  width: 0;
+  border-radius: 0 4px 4px 0;
+  transition: width 0.3s;
+}
+
+.bars b {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Décès : une croix plutôt qu'un disque, comme sur la carte */
+.dot--cross {
+  position: relative;
+  background: none !important;
+}
+
+.dot--cross::before,
+.dot--cross::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: -1px;
+  width: 11px;
+  height: 1.6px;
+  background: var(--cross-color, currentColor);
+  transform: rotate(45deg);
+}
+
+.dot--cross::after {
+  transform: rotate(-45deg);
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kpi__label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.kpi__value {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+
+.meter output {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.meter__track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.meter__fill {
+  width: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: #f1c40f;
+  transition: width 0.3s;
+}
+
+.chart {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+#epidemic-chart {
+  display: block;
+  width: 100%;
+  height: 90px;
+  cursor: crosshair;
+}
+
+.chart__tooltip {
+  position: absolute;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 110px;
+  padding: 6px 8px;
+  font-size: 11px;
+  background: rgba(21, 24, 28, 0.95);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.chart__tooltip[hidden] {
+  display: none;
+}
+
+.chart__time {
+  color: var(--text-muted);
+}
+
+.chart__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chart__row i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.chart__row b {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- Responsive ---------- */

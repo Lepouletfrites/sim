@@ -1,26 +1,52 @@
 import { CONFIG } from '../config.js';
+import { Clock } from './Clock.js';
 import { Population } from '../agents/Population.js';
+import { Routine } from '../agents/Routine.js';
+import { Epidemic } from '../epidemic/Epidemic.js';
 
 /**
  * Orchestre le temps simulé : timeScale + accumulateur à pas fixe.
- * À x5, la physique exécute 5 sous-étapes de 1/60 s par frame au lieu
- * d'un seul grand pas, ce qui empêche les agents de traverser les murs.
+ *
+ * - Physique à pas fixe de 1/60 s : à x20, 20 sous-étapes par frame au lieu
+ *   d'un grand pas, ce qui empêche les agents de traverser les murs.
+ * - Décisions lentes (routine, épidémie) toutes les `tickInterval` secondes simulées.
  */
 export class Simulation {
   constructor() {
     this.city = null;
+    this.clock = new Clock();
     this.population = null;
+    this.routine = null;
+    this.epidemic = null;
     this.timeScale = CONFIG.simulation.defaultTimeScale;
     this.accumulator = 0;
+    this.tickTimer = 0;
     this.alpha = 0;           // fraction du pas restant, pour l'interpolation du rendu
     this.lastSteps = 0;
+
+    // Partagé par référence avec Routine et Epidemic : survit à la régénération de la ville.
+    const e = CONFIG.epidemic;
+    this.settings = {
+      transmission: e.transmission.default / 100,
+      virulence: e.virulence.default / 100,
+      responsibility: e.responsibility.default / 100,
+      prudence: e.prudence.default / 100,
+      closeNightclubs: false,
+      closeCommerce: false,
+      telework: false,
+    };
   }
 
   load(city, count, seed) {
     this.city = city;
+    this.clock = new Clock();
     this.population = new Population(city, seed);
+    this.routine = new Routine(this.population, city, this.clock, this.settings, seed);
+    this.population.routine = this.routine;
     this.population.setCount(count);
+    this.epidemic = new Epidemic(this.population, city, this.clock, this.routine, seed, this.settings);
     this.accumulator = 0;
+    this.tickTimer = 0;
     this.alpha = 0;
   }
 
@@ -29,7 +55,16 @@ export class Simulation {
   }
 
   setPopulation(count) {
-    if (this.population) this.population.setCount(count);
+    if (!this.population) return;
+    this.population.setCount(count);
+    this.epidemic.recount();
+  }
+
+  /** Curseur (valeur 0..1) ou mesure sanitaire (booléen). */
+  setSetting(name, value) {
+    this.settings[name] = value;
+    // Une fermeture fait sortir les occupants sans attendre la fin de leur activité.
+    if (this.routine && typeof value === 'boolean') this.routine.tick();
   }
 
   update(frameDt) {
@@ -38,12 +73,19 @@ export class Simulation {
       return;
     }
 
-    const { fixedDt, maxStepsPerFrame } = CONFIG.simulation;
+    const { fixedDt, maxStepsPerFrame, tickInterval } = CONFIG.simulation;
     this.accumulator += frameDt * this.timeScale;
 
     let steps = 0;
     while (this.accumulator >= fixedDt && steps < maxStepsPerFrame) {
+      this.clock.advance(fixedDt);
       this.population.step(fixedDt);
+      this.tickTimer += fixedDt;
+      if (this.tickTimer >= tickInterval) {
+        this.tickTimer -= tickInterval;
+        this.epidemic.tick(tickInterval);
+        this.routine.tick();
+      }
       this.accumulator -= fixedDt;
       steps++;
     }

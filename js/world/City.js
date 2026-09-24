@@ -1,10 +1,17 @@
 import { CONFIG } from '../config.js';
+import { Random } from '../core/Random.js';
+import { NavGrid, FlowField } from './NavigationField.js';
+import { PlaceType } from './PlaceTypes.js';
 
 /**
  * Représentation runtime d'une ville générée.
- * Fournit deux structures d'accélération statiques :
+ * Fournit des structures d'accélération statiques :
  *  - buildingGrid : bâtiments indexés par case (collisions cercle/rectangle)
  *  - walkGrid     : masque de cases praticables (spawn, sondes de direction)
+ *  - navGrid      : grille grossière pour les champs de flux
+ *  - fieldTo()    : champ de flux vers n'importe quel bâtiment (calculé à la demande)
+ *
+ * Chaque bâtiment reçoit un type (logement, bureaux, commerce...) et une capacité.
  */
 export class City {
   constructor(layout) {
@@ -20,6 +27,140 @@ export class City {
 
     this.buildBuildingGrid();
     this.buildWalkGrid();
+    this.navGrid = new NavGrid(this);
+    this.fields = new Map(); // index du bâtiment -> FlowField (calcul paresseux)
+    this.setupHospital();
+    this.assignPlaces();
+  }
+
+  // ------------------------------------------------------------------ Lieux
+
+  /** Choisit un grand bâtiment proche du centre comme hôpital. */
+  setupHospital() {
+    this.hospital = null;
+    this.hospitalIndex = -1;
+    this.hospitalField = null;
+    if (this.buildings.length === 0) return;
+
+    const cx = this.width / 2;
+    const cy = this.height / 2;
+    const large = this.buildings.filter((b) => b.w >= 36 && b.h >= 36);
+    const candidates = large.length > 0 ? large : this.buildings;
+    let best = null;
+    let bestScore = Infinity;
+    for (const b of candidates) {
+      const score =
+        Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy) - Math.sqrt(b.w * b.h) * 0.5;
+      if (score < bestScore) {
+        bestScore = score;
+        best = b;
+      }
+    }
+
+    const hospitalIndex = this.buildings.indexOf(best);
+    const field = this.fieldTo(hospitalIndex);
+    if (field) {
+      this.hospital = best;
+      this.hospitalIndex = hospitalIndex;
+      this.hospitalField = field;
+    }
+  }
+
+  /**
+   * Répartit les types de bâtiments (déterministe pour une graine donnée) :
+   *  - centres commerciaux : les plus grands bâtiments
+   *  - boîtes de nuit      : bâtiments moyens
+   *  - restaurants         : petits bâtiments
+   *  - bureaux             : tirés au hasard, en favorisant les grands
+   *  - le reste            : logements
+   */
+  assignPlaces() {
+    const cfg = CONFIG.places;
+    const rng = new Random(this.seed ^ 0x2545f491);
+    const area = (i) => this.buildings[i].w * this.buildings[i].h;
+
+    for (const b of this.buildings) b.type = PlaceType.HOME;
+    if (this.hospital) this.hospital.type = PlaceType.HOSPITAL;
+
+    const free = this.buildings
+      .map((_, i) => i)
+      .filter((i) => i !== this.hospitalIndex && this.fieldTo(i) !== null)
+      .sort((a, b) => area(b) - area(a));
+    const n = free.length;
+    const count = (every) => Math.max(1, Math.min(3, Math.round(n / every)));
+    const take = (list, k, type) => {
+      for (let j = 0; j < k && list.length > 0; j++) {
+        const i = list.splice(Math.floor(rng.next() * list.length), 1)[0];
+        this.buildings[i].type = type;
+        free.splice(free.indexOf(i), 1);
+      }
+    };
+
+    if (n >= 8) {
+      // Les plus grands pour les centres commerciaux
+      for (let k = count(cfg.mallEvery); k > 0; k--) this.buildings[free.shift()].type = PlaceType.MALL;
+      const third = Math.floor(free.length / 3);
+      take(free.slice(third, 2 * third), count(cfg.nightclubEvery), PlaceType.NIGHTCLUB);
+      take(free.slice(Math.floor(free.length / 2)), Math.max(2, Math.round(n * cfg.restaurantShare)), PlaceType.RESTAURANT);
+      // Bureaux : tirage pondéré par la surface
+      const weighted = [...free].sort((a, b) => area(b) * rng.range(0.3, 1.7) - area(a) * rng.range(0.3, 1.7));
+      take(weighted.slice(0, Math.round(n * cfg.workShare * 1.5)), Math.round(n * cfg.workShare), PlaceType.WORK);
+    }
+
+    this.byType = {};
+    for (const type of Object.values(PlaceType)) this.byType[type] = [];
+    this.buildings.forEach((b, i) => {
+      // Logements et bureaux accueillent toujours leurs occupants attitrés ;
+      // seuls les lieux ouverts au public ont une jauge.
+      b.capacity =
+        b.type === PlaceType.HOME || b.type === PlaceType.WORK ? Infinity
+          : b.type === PlaceType.HOSPITAL ? CONFIG.epidemic.hospitalCapacity
+            : Math.max(6, Math.floor(b.w * b.h * cfg.capacityPerArea));
+      // Un bâtiment enclavé (inaccessible depuis la rue) reste décoratif.
+      if (this.fieldTo(i) !== null) this.byType[b.type].push(i);
+    });
+
+    // Tirages pondérés par la surface (un grand immeuble loge plus de monde).
+    this.cumulative = {};
+    for (const [type, list] of Object.entries(this.byType)) {
+      let sum = 0;
+      this.cumulative[type] = list.map((i) => (sum += area(i)));
+    }
+  }
+
+  /** Bâtiment d'un type donné, tiré au hasard proportionnellement à sa surface (-1 si aucun). */
+  pickPlace(type, rng) {
+    const list = this.byType[type];
+    if (!list || list.length === 0) return -1;
+    const cumulative = this.cumulative[type];
+    const r = rng.next() * cumulative[cumulative.length - 1];
+    let lo = 0;
+    let hi = cumulative.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cumulative[mid] < r) lo = mid + 1;
+      else hi = mid;
+    }
+    return list[lo];
+  }
+
+  typeOf(place) {
+    return place < 0 ? 'street' : this.buildings[place].type;
+  }
+
+  /**
+   * Champ de flux vers un bâtiment, calculé à la première demande puis mis en cache.
+   * @returns {FlowField|null} null si le bâtiment est inaccessible
+   */
+  fieldTo(buildingIndex) {
+    if (buildingIndex < 0) return null;
+    let field = this.fields.get(buildingIndex);
+    if (field === undefined) {
+      field = new FlowField(this.navGrid, this.buildings[buildingIndex]);
+      if (!field.isValid) field = null;
+      this.fields.set(buildingIndex, field);
+    }
+    return field;
   }
 
   // ---------------------------------------------------------------- Bâtiments
