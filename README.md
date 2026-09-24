@@ -5,7 +5,8 @@ Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D)
 ## Fonctionnalités
 
 ### Ville et physique
-- Ville procédurale déterministe (graine) : super-blocs séparés par des avenues, subdivisés en BSP avec des ruelles, places ouvertes.
+- Ville procédurale déterministe (graine) : îlots séparés par des avenues, subdivisés en BSP avec des ruelles.
+- **Densité urbaine** (1 à 10) : à 1, un village avec peu de petits bâtiments espacés au milieu des prés ; à 10, un centre-ville de bâtiments mitoyens. Sur une carte de 1150 × 850 : 43 bâtiments (4 % du sol bâti) à 1, 117 (14 %) à 5, 196 (32 %) à 10.
 - 100 à 1 500 habitants. Collision cercle/rectangle avec glissement le long des murs, séparation entre voisins, croisement par la droite.
 - Contrôles : Pause, x1, x5, x10, x25, x50 (clavier : `Espace`, `1` à `5`), population, densité urbaine, régénération.
 
@@ -38,7 +39,7 @@ Sain → Latence (1 à 2 jours, pas encore contagieux) → Porteur contagieux �
 | Curseur | Effet |
 |---|---|
 | **Transmission** | Chance de contaminer par heure de contact rapproché (< 12 px), dans le **même lieu**, × le risque du lieu |
-| **Virulence** | Chance de forme grave × fragilité (seniors ≈ ×3, jeunes ≈ ×0,4). Un cas grave meurt dans 45 % des cas, 8 % à l'hôpital |
+| **Virulence** | Augmente la part de formes graves (× fragilité : seniors ≈ ×3, jeunes ≈ ×0,4) **et** leur létalité : sans soins, ~23 % à 10 %, ~95 % à 100 %, puis × fragilité. L'hôpital divise le risque par 5. Les décès surviennent au fil de la maladie |
 | **Responsabilité** | Part des malades qui se prennent en charge : quarantaine si forme légère, hôpital si grave. Les autres continuent de travailler (**présentéisme**) |
 | **Prudence** | Quand l'inquiétude monte : **masques**, distanciation, moins de sorties, **confinement volontaire** de 1 à 3 jours |
 
@@ -47,6 +48,16 @@ Sain → Latence (1 à 2 jours, pas encore contagieux) → Porteur contagieux �
 | Fermer les boîtes de nuit | Les clubs restent fermés |
 | Fermer commerces et restaurants | Centre commercial et restaurants fermés |
 | Télétravail obligatoire | Les salariés travaillent depuis chez eux |
+
+**Hôpital saturé** (40 lits) : les cas graves qui ne trouvent pas de lit restent alités chez eux, sans soins, donc avec un risque de décès 5 fois plus élevé. Ils rejoignent l'hôpital dès qu'un lit se libère.
+
+Effet de la virulence (600 habitants, 10 cas index, autres réglages par défaut, une simulation par ligne) :
+
+| Virulence | Infectés | Décès | Létalité | Hôpital | Max. en attente d'un lit |
+|---|---|---|---|---|---|
+| 10 % | 480 | 2 | 0,4 % | 12 / 40 | 0 |
+| 50 % | 462 | 44 | 9,5 % | 40 / 40 (saturé) | 18 |
+| 100 % | 480 | 147 | 31 % | 40 / 40 (saturé) | 36 |
 
 ### Pourquoi ce modèle de transmission
 

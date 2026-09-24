@@ -92,6 +92,7 @@
           <li><i class="swatch" data-place="hospital"></i>Hospitalisés<b id="stat-hospitalized">0</b></li>
           <li><i class="dot dot--ring dot--ring-home" data-health="2"></i>En quarantaine chez eux<b id="stat-quarantined">0</b></li>
           <li><i class="swatch" data-place="home"></i>Cas graves alités sans soins<b id="stat-bedridden">0</b></li>
+          <li class="legend__sub">dont faute de lit à l'hôpital<b id="stat-waitingBed">0</b></li>
           <li><i class="dot" data-health="3"></i>Guéris (immunisés)<b id="stat-recovered">0</b></li>
           <li><i class="dot dot--cross" data-health="4"></i>Décès<b id="stat-dead">0</b></li>
         </ul>
@@ -127,7 +128,7 @@
             <output id="value-virulence">10 %</output>
           </span>
           <input type="range" id="slider-virulence">
-          <span class="control__help">Chance de forme grave × fragilité (seniors ≈ ×3, jeunes ≈ ×0,4). Un cas grave meurt dans 45 % des cas, 8 % à l'hôpital</span>
+          <span class="control__help">Augmente la part de formes graves (surtout chez les seniors) et leur létalité : sans soins, un cas grave meurt dans ~23 % des cas à 10 %, ~95 % à 100 %. L'hôpital divise ce risque par 5</span>
         </label>
 
         <div class="btn-row">

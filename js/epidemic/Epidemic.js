@@ -28,6 +28,12 @@ export const CONTAGION_PLACES = [STREET, PlaceType.WORK, PlaceType.MALL, PlaceTy
  *  - responsable, forme grave  -> hôpital (létalité fortement réduite)
  *  - irresponsable, légère     -> continue sa vie, travail compris (présentéisme)
  *  - irresponsable, grave      -> alité chez lui, parfois finit par consulter
+ * Hôpital saturé : les cas graves restent alités chez eux, sans soins, et
+ * prennent un lit dès qu'il s'en libère un.
+ *
+ * Virulence : augmente à la fois la part de formes graves ET leur létalité.
+ * Le risque de décès est réparti tout au long de la maladie (taux horaire),
+ * plus faible à l'hôpital, plus fort chez les personnes fragiles.
  */
 export class Epidemic {
   /**
@@ -52,7 +58,14 @@ export class Epidemic {
       if (b === city.hospitalIndex && c.health === Health.SYMPTOMATIC) {
         const [min, max] = CONFIG.epidemic.treatment;
         c.healthTimer = Math.min(c.healthTimer, this.rng.range(min, max));
+        c.illnessDuration = c.healthTimer; // le risque hospitalier s'étale sur le séjour
       }
+    };
+    // Hôpital plein à l'arrivée : retour à la maison en attendant un lit.
+    routine.onRefused = (c, b) => {
+      if (b !== city.hospitalIndex) return false;
+      this.waitForBed(c);
+      return true;
     };
 
     this.counts = {};
@@ -133,6 +146,7 @@ export class Epidemic {
       c.severe = false;
       c.care = Care.NONE;
       c.pendingDecision = false;
+      c.waitingBed = false;
       c.masked = false;
       c.speedFactor = 1;
       c.extraSpace = 0;
@@ -182,6 +196,9 @@ export class Epidemic {
     const spacing = s.prudence * this.awareness * cfg.maxExtraSpace;
     const maskIntent = clamp01(s.prudence * this.awareness * cfg.maskGain);
     const confineChance = s.prudence * this.awareness * cfg.confineRate * hours;
+    // Lits libres, en comptant ceux déjà promis aux malades en route.
+    this.freeBeds = this.city.hospitalIndex < 0 ? 0
+      : cfg.hospitalCapacity - this.counts.hospitalized - this.counts.toHospital;
 
     for (const c of this.population.citizens) {
       if (!c.alive) continue;
@@ -198,13 +215,26 @@ export class Epidemic {
         }
       } else if (c.health === Health.SYMPTOMATIC) {
         c.healthTimer -= hours;
+        // Forme grave : risque de décès réparti sur toute la durée de la maladie.
+        if (c.severe && rng.chance(this.deathChance(c, hours))) {
+          this.die(c);
+          continue;
+        }
         if (c.healthTimer <= 0) {
-          this.endIllness(c);
+          this.recover(c);
           continue;
         }
         if (c.pendingDecision) {
           c.hesitation -= hours;
           if (c.hesitation <= 0) this.decideCare(c);
+        }
+        // Un lit s'est libéré : le premier malade en attente y va.
+        if (c.waitingBed && this.freeBeds > 0) {
+          this.freeBeds--;
+          c.waitingBed = false;
+          c.care = Care.HOSPITAL;
+          c.speedFactor = cfg.sickSpeedFactor;
+          this.routine.replan(c);
         }
       }
 
@@ -285,6 +315,7 @@ export class Epidemic {
     c.health = Health.SYMPTOMATIC;
     c.severe = this.rng.chance(clamp01(this.settings.virulence * c.frailty));
     c.healthTimer = range(c.severe ? cfg.severeIllness : cfg.illness);
+    c.illnessDuration = c.healthTimer;
     c.speedFactor = c.severe ? cfg.severeSpeedFactor : cfg.sickSpeedFactor;
     // Les plus civiques réagissent vite, les autres temporisent.
     c.pendingDecision = true;
@@ -299,30 +330,47 @@ export class Epidemic {
     let care = Care.NONE;
     if (responsible) care = c.severe ? Care.HOSPITAL : Care.QUARANTINE;
     else if (c.severe) care = this.rng.chance(cfg.irresponsibleSevereCare) ? Care.HOSPITAL : Care.BEDRIDDEN;
-    if (care === Care.HOSPITAL && this.city.hospitalIndex < 0) care = Care.BEDRIDDEN;
     if (care === Care.NONE && c.care === Care.CONFINED) return; // déjà confiné : il y reste
 
-    if (care === Care.HOSPITAL) c.speedFactor = cfg.sickSpeedFactor;
+    if (care === Care.HOSPITAL) {
+      if (this.freeBeds <= 0) {
+        this.waitForBed(c); // hôpital saturé (ou inexistant) : alité chez soi
+        return;
+      }
+      this.freeBeds--;
+      c.speedFactor = cfg.sickSpeedFactor;
+    }
     c.care = care;
     this.routine.replan(c);
   }
 
-  endIllness(c) {
-    const cfg = CONFIG.epidemic;
-    if (c.severe) {
-      const treated = c.place >= 0 && c.place === this.city.hospitalIndex;
-      if (this.rng.chance(treated ? cfg.deathHospital : cfg.deathUntreated)) {
-        this.die(c);
-        return;
-      }
-    }
-    this.recover(c);
+  /** Pas de lit disponible : le malade reste alité chez lui, sans soins, en attendant. */
+  waitForBed(c) {
+    c.care = Care.BEDRIDDEN;
+    c.waitingBed = this.city.hospitalIndex >= 0;
+    this.routine.replan(c);
+  }
+
+  /**
+   * Létalité d'une forme grave sur toute la maladie :
+   *   (base + pente × virulence) × fragilité, divisée à l'hôpital.
+   * Convertie en probabilité sur `hours` (taux horaire constant).
+   */
+  deathChance(c, hours) {
+    const { lethality } = CONFIG.epidemic;
+    const frailty = Math.min(lethality.frailtyMax, Math.max(lethality.frailtyMin, 0.6 + 0.3 * c.frailty));
+    let total = clamp01((lethality.base + lethality.perVirulence * this.settings.virulence) * frailty);
+    if (c.place >= 0 && c.place === this.city.hospitalIndex) total *= lethality.hospitalFactor;
+    if (total <= 0) return 0;
+    if (total >= 1) total = 0.999;
+    return 1 - Math.pow(1 - total, hours / Math.max(1, c.illnessDuration));
   }
 
   recover(c) {
     c.health = Health.RECOVERED;
     c.healthTimer = 0;
     c.severe = false;
+    c.waitingBed = false;
     c.pendingDecision = false;
     c.speedFactor = 1;
     if (c.care !== Care.NONE && c.care !== Care.CONFINED) {
@@ -335,6 +383,7 @@ export class Epidemic {
     this.deathMarks.push({ x: c.x, y: c.y, age: 0 });
     c.health = Health.DEAD;
     c.care = Care.NONE;
+    c.waitingBed = false;
     c.place = -1;
     c.destination = -1;
     c.field = null;
@@ -360,7 +409,7 @@ export class Epidemic {
     const counts = this.counts;
     for (const key of [
       'alive', 'susceptible', 'carriers', 'symptomatic', 'sickOut', 'toHospital',
-      'hospitalized', 'quarantined', 'bedridden', 'confined', 'severe', 'masked',
+      'hospitalized', 'quarantined', 'bedridden', 'waitingBed', 'confined', 'severe', 'masked',
       'recovered', 'dead',
     ]) counts[key] = 0;
     const byPlace = this.byPlace;
@@ -387,7 +436,10 @@ export class Epidemic {
             if (c.place === hospital) counts.hospitalized++;
             else counts.toHospital++;
           } else if (c.care === Care.QUARANTINE) counts.quarantined++;
-          else if (c.care === Care.BEDRIDDEN) counts.bedridden++;
+          else if (c.care === Care.BEDRIDDEN) {
+            counts.bedridden++;
+            if (c.waitingBed) counts.waitingBed++;
+          }
           else counts.sickOut++;
           break;
         default: counts.recovered++;

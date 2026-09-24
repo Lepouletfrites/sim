@@ -6,6 +6,18 @@ const TAU = Math.PI * 2;
 const HEALTH_DRAW_ORDER = [Health.SUSCEPTIBLE, Health.RECOVERED, Health.INCUBATING, Health.SYMPTOMATIC];
 const VENUES = [PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
 
+/** Mélange deux couleurs "#rrggbb" (t = 0 -> a, t = 1 -> b). */
+function mixHex(a, b, t) {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const channel = (shift) => {
+    const ca = (pa >> shift) & 255;
+    const cb = (pb >> shift) & 255;
+    return Math.round(ca + (cb - ca) * t);
+  };
+  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
+}
+
 /**
  * Rendu Canvas 2D.
  * La ville (statique) est dessinée une seule fois dans un calque hors écran.
@@ -53,7 +65,11 @@ export class Renderer {
     const city = this.city;
     if (!city) return;
 
-    // Places / espaces ouverts
+    // Sol des îlots : vert à la campagne, gris en ville
+    ctx.fillStyle = mixHex(colors.groundRural, colors.groundUrban, city.params.t);
+    for (const b of city.blocks) ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    // Parcelles non bâties : parcs et prés
     ctx.fillStyle = colors.plaza;
     for (const p of city.plazas) ctx.fillRect(p.x, p.y, p.w, p.h);
 

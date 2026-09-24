@@ -15,7 +15,7 @@ const PLACES_SHOWN = [
 ];
 const EPIDEMIC_COUNTS = [
   'susceptible', 'carriers', 'sickOut', 'toHospital', 'hospitalized',
-  'quarantined', 'bedridden', 'recovered', 'dead', 'masked', 'confined', 'severe',
+  'quarantined', 'bedridden', 'waitingBed', 'recovered', 'dead', 'masked', 'confined', 'severe',
 ];
 const SPEED_KEYS = { 1: 1, 2: 5, 3: 10, 4: 25, 5: 50 };
 

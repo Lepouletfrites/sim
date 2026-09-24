@@ -23,6 +23,7 @@ export class Routine {
     this.rng = new Random(seed ^ 0x68e31da4);
     this.awareness = 0;       // tenu à jour par l'Epidemic
     this.onEnter = null;      // callback (citoyen, bâtiment) à l'entrée d'un bâtiment
+    this.onRefused = null;    // callback (citoyen, bâtiment) -> true si le refus est pris en charge
     this.occupancy = new Uint16Array(city.buildings.length);
     this.openCache = new Map();
   }
@@ -232,6 +233,7 @@ export class Routine {
       return;
     }
     if (this.occupancy[b] >= building.capacity) {
+      if (this.onRefused && this.onRefused(c, b)) return; // ex. hôpital plein : géré par l'Epidemic
       // Complet : on flâne un moment avant de réessayer (ou de faire autre chose).
       const [min, max] = CONFIG.routine.retryDelay;
       c.destination = -1;

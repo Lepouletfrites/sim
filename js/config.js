@@ -24,11 +24,12 @@ export const CONFIG = {
     minLot: 26,               // taille minimale d'une parcelle
     maxDepth: 8,              // profondeur max de subdivision BSP
     density: { min: 1, max: 10, default: 5 },
-    // Valeurs interpolées selon la densité (low = densité 1, high = densité 10)
-    blockSize: { low: 130, high: 280 },
-    maxLot: { low: 55, high: 110 },
-    setback: { low: 7, high: 1 },
-    plazaChance: { low: 0.18, high: 0.03 },
+    // Valeurs interpolées selon la densité (low = 1, rural ; high = 10, centre-ville)
+    blockSize: { low: 290, high: 150 },     // taille des îlots entre avenues
+    maxLot: { low: 125, high: 48 },         // taille max d'une parcelle
+    setback: { low: 12, high: 1 },          // retrait du bâtiment sur sa parcelle
+    plazaChance: { low: 0.5, high: 0.02 },  // parcelle laissée en espace vert
+    buildingFill: { low: [0.35, 0.65], high: [0.92, 1] }, // part du terrain couverte
     buildingGridCell: 64,     // grille statique d'accélération des collisions
     walkCell: 2,              // résolution de la grille de marche
     walkClearance: 1.5,       // marge autour des bâtiments dans la grille de marche
@@ -148,9 +149,16 @@ export const CONFIG = {
     asymptomaticChance: 0.3,
     asymptomaticInfectivity: 0.5, // les asymptomatiques émettent moins de virus
 
-    // Formes graves et décès
-    deathUntreated: 0.45,     // létalité d'un cas grave non hospitalisé
-    deathHospital: 0.08,      // létalité d'un cas grave hospitalisé
+    // Formes graves et décès. Létalité d'un cas grave sans soins :
+    //   (base + perVirulence × virulence) × fragilité
+    //   -> 23 % à virulence 10 %, 95 % à 100 %, avant l'effet de la fragilité
+    lethality: {
+      base: 0.15,
+      perVirulence: 0.8,
+      frailtyMin: 0.65,       // jeune robuste : risque × 0,65
+      frailtyMax: 1.5,        // senior fragile : risque × 1,5
+      hospitalFactor: 0.2,    // l'hôpital divise le risque par 5
+    },
     irresponsibleSevereCare: 0.35, // un irresponsable grave finit parfois par consulter
 
     // Comportements
@@ -182,7 +190,9 @@ export const CONFIG = {
 
   colors: {
     background: '#1a1a1a',
-    plaza: '#1f2328',
+    groundRural: '#1a261d',   // sol des îlots à la campagne (champs, jardins)
+    groundUrban: '#1f2124',   // ... et en ville (trottoirs, cours)
+    plaza: '#1e3024',         // parcelles non bâties : parcs, prés
     roadMark: 'rgba(255, 255, 255, 0.05)',
     night: 'rgba(4, 8, 24, ALPHA)',
     nightMaxAlpha: 0.45,

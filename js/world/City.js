@@ -22,6 +22,7 @@ export class City {
     this.params = layout.params;
     this.buildings = layout.buildings;
     this.plazas = layout.plazas;
+    this.blocks = layout.blocks;
     this.avenuesX = layout.avenuesX;
     this.avenuesY = layout.avenuesY;
 

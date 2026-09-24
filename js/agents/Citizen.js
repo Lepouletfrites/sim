@@ -91,6 +91,8 @@ export class Citizen {
     this.severe = false;
     this.care = Care.NONE;
     this.careUntil = 0;
+    this.waitingBed = false; // cas grave alité faute de lit à l'hôpital
+    this.illnessDuration = 1;
     this.pendingDecision = false;
     this.hesitation = 0;
     this.masked = false;
