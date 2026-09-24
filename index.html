@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Simulation urbaine 2D procédurale et interactive en Vanilla JavaScript.">
+  <title>CitySim</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <main class="viewport" id="viewport">
+      <canvas id="city-canvas" aria-label="Carte de la ville simulée"></canvas>
+      <div class="pause-badge" id="pause-badge" hidden>EN PAUSE</div>
+    </main>
+
+    <aside class="sidebar">
+      <header class="sidebar__header">
+        <h1>CitySim</h1>
+        <p class="subtitle">Simulation urbaine procédurale</p>
+      </header>
+
+      <section class="panel">
+        <h2 class="panel__title">Statistiques</h2>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat__label">Habitants</span>
+            <span class="stat__value" id="stat-population">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat__label">FPS</span>
+            <span class="stat__value" id="stat-fps">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Bâtiments</span>
+            <span class="stat__value stat__value--small" id="stat-buildings">0</span>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Sous-étapes / frame</span>
+            <span class="stat__value stat__value--small" id="stat-steps">0</span>
+          </div>
+        </div>
+        <p class="seed">Graine : <code id="stat-seed">—</code></p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">Temps</h2>
+        <div class="btn-group" role="group" aria-label="Vitesse de simulation">
+          <button type="button" class="btn-toggle" data-scale="0">Pause</button>
+          <button type="button" class="btn-toggle" data-scale="1">x1</button>
+          <button type="button" class="btn-toggle" data-scale="2">x2</button>
+          <button type="button" class="btn-toggle" data-scale="5">x5</button>
+        </div>
+        <p class="hint"><kbd>Espace</kbd> pause · <kbd>1</kbd> <kbd>2</kbd> <kbd>5</kbd> vitesse</p>
+      </section>
+
+      <section class="panel">
+        <h2 class="panel__title">Paramètres</h2>
+
+        <label class="control" for="slider-population">
+          <span class="control__row">
+            <span>Population totale</span>
+            <output id="value-population">500</output>
+          </span>
+          <input type="range" id="slider-population">
+        </label>
+
+        <label class="control" for="slider-density">
+          <span class="control__row">
+            <span>Densité urbaine</span>
+            <output id="value-density">5</output>
+          </span>
+          <input type="range" id="slider-density">
+        </label>
+      </section>
+
+      <button type="button" class="btn-primary" id="btn-regenerate">Régénérer la ville</button>
+
+      <footer class="sidebar__footer">
+        Vanilla JS · Canvas 2D · Spatial Hash Grid
+      </footer>
+    </aside>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
