@@ -5,6 +5,7 @@ import { resolveCircleRect, clampToBounds } from '../physics/Collision.js';
 import { Citizen } from './Citizen.js';
 import { rollTraits } from './Traits.js';
 import { WanderBehavior } from './WanderBehavior.js';
+import { ZombieState } from '../zombie/ZombieState.js';
 
 const COLLISION_PASSES = 2;
 
@@ -182,6 +183,8 @@ export class Population {
         }
         if (!hit) break;
       }
+      // Les barricades de rue n'arrêtent que les zombies.
+      if (c.zombie === ZombieState.ZOMBIE && this.zombies !== null) this.zombies.response.collideWalls(c, dt);
       clampToBounds(c, city.width, city.height);
 
       const stuckSpeed = c.speed * c.speedFactor * cfg.stuckSpeedRatio;

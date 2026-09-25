@@ -93,6 +93,7 @@ export class Simulation {
     while (this.accumulator >= fixedDt && steps < maxStepsPerFrame) {
       this.clock.advance(fixedDt);
       this.population.step(fixedDt);
+      this.zombies.step(fixedDt);
       this.tickTimer += fixedDt;
       if (this.tickTimer >= tickInterval) {
         this.tickTimer -= tickInterval;

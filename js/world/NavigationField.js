@@ -108,46 +108,113 @@ export class FlowField {
    */
   steer(agent) {
     const grid = this.grid;
-    const cs = grid.cellSize;
-    const gx = Math.floor(agent.x / cs);
-    const gy = Math.floor(agent.y / cs);
+    const gx = Math.floor(agent.x / grid.cellSize);
+    const gy = Math.floor(agent.y / grid.cellSize);
     if (gx < 0 || gy < 0 || gx >= grid.cols || gy >= grid.rows) return false;
 
-    const here = this.dist[gy * grid.cols + gx];
-    let tx;
-    let ty;
-
-    if (here === 0) {
+    if (this.dist[gy * grid.cols + gx] === 0) {
       // À la porte : on se dirige vers le mur du bâtiment.
       const t = this.target;
-      tx = agent.x < t.x ? t.x : agent.x > t.x + t.w ? t.x + t.w : agent.x;
-      ty = agent.y < t.y ? t.y : agent.y > t.y + t.h ? t.y + t.h : agent.y;
-    } else {
-      let best = -1;
-      let bestDist = here >= 0 ? here : Infinity;
-      for (let k = 0; k < 8; k++) {
-        const [dx, dy] = NEIGHBORS[k];
-        const nx = gx + dx;
-        const ny = gy + dy;
-        if (!grid.isOpen(nx, ny)) continue;
-        const d = this.dist[ny * grid.cols + nx];
-        if (d < 0 || d >= bestDist) continue;
-        // Pas de diagonale qui couperait l'angle d'un bâtiment.
-        if (k >= 4 && (!grid.isOpen(gx + dx, gy) || !grid.isOpen(gx, gy + dy))) continue;
-        best = k;
-        bestDist = d;
-      }
-      if (best === -1) return false;
-      tx = (gx + NEIGHBORS[best][0] + 0.5) * cs;
-      ty = (gy + NEIGHBORS[best][1] + 0.5) * cs;
+      const tx = agent.x < t.x ? t.x : agent.x > t.x + t.w ? t.x + t.w : agent.x;
+      const ty = agent.y < t.y ? t.y : agent.y > t.y + t.h ? t.y + t.h : agent.y;
+      pointAgent(agent, tx, ty);
+      return true;
     }
-
-    const dx = tx - agent.x;
-    const dy = ty - agent.y;
-    const len = Math.hypot(dx, dy);
-    if (len < 1e-6) return true;
-    agent.dirX = dx / len;
-    agent.dirY = dy / len;
-    return true;
+    return descend(grid, this.dist, agent, gx, gy);
   }
+}
+
+/**
+ * Champ de distances multi-sources recalculé à la demande : distance (en cases)
+ * au point source le plus proche. Sert aux forces de l'ordre pour rejoindre
+ * le zombie le plus proche par les rues, avec un seul BFS pour toutes les unités.
+ */
+export class SourceField {
+  constructor(grid) {
+    this.grid = grid;
+    this.dist = new Int16Array(grid.cols * grid.rows).fill(-1);
+    this.hasSources = false;
+  }
+
+  /** @param {Iterable<{x:number, y:number}>} sources */
+  update(sources) {
+    const { cols, rows, cellSize: cs, walkable, queue } = this.grid;
+    const dist = this.dist;
+    dist.fill(-1);
+    let head = 0;
+    let tail = 0;
+    for (const s of sources) {
+      const gx = Math.floor(s.x / cs);
+      const gy = Math.floor(s.y / cs);
+      if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
+      const i = gy * cols + gx;
+      if (dist[i] === 0) continue;
+      dist[i] = 0;
+      queue[tail++] = i;
+    }
+    this.hasSources = tail > 0;
+
+    while (head < tail) {
+      const i = queue[head++];
+      const gx = i % cols;
+      const gy = (i / cols) | 0;
+      const d = dist[i] + 1;
+      for (let k = 0; k < 4; k++) {
+        const nx = gx + NEIGHBORS[k][0];
+        const ny = gy + NEIGHBORS[k][1];
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const j = ny * cols + nx;
+        if (walkable[j] && dist[j] === -1) {
+          dist[j] = d;
+          queue[tail++] = j;
+        }
+      }
+    }
+  }
+
+  /**
+   * Oriente l'agent vers la source la plus proche.
+   * @returns {boolean} false s'il est déjà sur une case source (ou hors du champ)
+   */
+  steer(agent) {
+    if (!this.hasSources) return false;
+    const grid = this.grid;
+    const gx = Math.floor(agent.x / grid.cellSize);
+    const gy = Math.floor(agent.y / grid.cellSize);
+    if (gx < 0 || gy < 0 || gx >= grid.cols || gy >= grid.rows) return false;
+    if (this.dist[gy * grid.cols + gx] === 0) return false;
+    return descend(grid, this.dist, agent, gx, gy);
+  }
+}
+
+function pointAgent(agent, tx, ty) {
+  const dx = tx - agent.x;
+  const dy = ty - agent.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return;
+  agent.dirX = dx / len;
+  agent.dirY = dy / len;
+}
+
+/** Descente de gradient : vise la case voisine la plus proche de la cible. */
+function descend(grid, dist, agent, gx, gy) {
+  const here = dist[gy * grid.cols + gx];
+  let best = -1;
+  let bestDist = here >= 0 ? here : Infinity;
+  for (let k = 0; k < 8; k++) {
+    const [dx, dy] = NEIGHBORS[k];
+    const nx = gx + dx;
+    const ny = gy + dy;
+    if (!grid.isOpen(nx, ny)) continue;
+    const d = dist[ny * grid.cols + nx];
+    if (d < 0 || d >= bestDist) continue;
+    // Pas de diagonale qui couperait l'angle d'un bâtiment.
+    if (k >= 4 && (!grid.isOpen(gx + dx, gy) || !grid.isOpen(gx, gy + dy))) continue;
+    best = k;
+    bestDist = d;
+  }
+  if (best === -1) return false;
+  const cs = grid.cellSize;
+  pointAgent(agent, (gx + NEIGHBORS[best][0] + 0.5) * cs, (gy + NEIGHBORS[best][1] + 0.5) * cs);
+  return true;
 }

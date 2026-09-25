@@ -26,6 +26,7 @@ function formatValue(slider, value) {
     case '%': return `${value} %`;
     case 'h': return value === 0 ? 'immédiat' : `${value} h`;
     case 'j': return value === 0 ? 'jamais' : `${value} j`;
+    case 'n': return String(value);
     default: return `${value} ${slider.unit}`;
   }
 }
@@ -121,6 +122,7 @@ export class ZombiePanel {
     this.el.cureMeter.style.width = `${cure}%`;
 
     this.updateStatus(zombies);
+    this.updateResponse(zombies);
     this.updateLog(zombies);
     this.chart.setData(zombies.history, zombies.historyVersion);
   }
@@ -157,6 +159,56 @@ export class ZombiePanel {
     this.el.status.dataset.level = level;
     this.el.statusTitle.textContent = title;
     this.el.statusText.textContent = text;
+  }
+
+  /** Jauges de riposte : part transformée, repère du seuil, état et bilan de chaque force. */
+  updateResponse(zombies) {
+    const s = zombies.settings;
+    const r = zombies.response;
+    const share = zombies.share;
+    $('#zstat-share').textContent = `${Math.round(share * 100)} %`;
+
+    const units = (kind, stock) => {
+      const alive = r.alive(kind);
+      return { alive, text: `${alive}/${stock.sent} sur le terrain · ${plural(stock.kills, 'zombie')} neutralisé${stock.kills > 1 ? 's' : ''} · ${stock.lost} tombé${stock.lost > 1 ? 's' : ''}` };
+    };
+
+    const rows = {
+      police: { on: s.policeOn, threshold: s.policeThreshold, deployed: r.police.deployed, ...units('police', r.police) },
+      army: { on: s.armyOn, threshold: s.armyThreshold, deployed: r.army.deployed, ...units('army', r.army) },
+      walls: {
+        on: s.wallsOn,
+        threshold: s.wallThreshold,
+        deployed: r.wallState.deployed,
+        alive: r.walls.length,
+        text: `${plural(r.walls.length, 'barricade')} debout · ${r.wallState.built} dressée${r.wallState.built > 1 ? 's' : ''} · ${r.wallState.broken} ${r.wallState.broken > 1 ? 'ont' : 'a'} cédé`,
+      },
+    };
+
+    for (const [key, row] of Object.entries(rows)) {
+      const fill = $(`#resp-${key}-fill`);
+      fill.style.width = `${Math.min(100, share * 100)}%`;
+      fill.classList.toggle('is-reached', row.on && share >= row.threshold && zombies.counts.zombies > 0);
+      $(`#resp-${key}-mark`).style.left = `${row.threshold * 100}%`;
+
+      const badge = $(`#resp-${key}-state`);
+      let label = 'en attente';
+      let style = 'badge--closed';
+      if (!row.on) label = 'désactivée';
+      else if (row.deployed && row.alive > 0) {
+        label = key === 'walls' ? 'en place' : 'déployée';
+        style = 'badge--open';
+      } else if (row.deployed) {
+        label = key === 'walls' ? 'toutes tombées' : 'décimée';
+        style = 'badge--alert';
+      }
+      badge.textContent = label;
+      badge.className = `badge ${style}`;
+
+      if (row.deployed || row.alive > 0 || (key !== 'walls' && r[key].sent > 0) || (key === 'walls' && r.wallState.built > 0)) {
+        $(`#resp-${key}-stats`).textContent = row.text;
+      }
+    }
   }
 
   updateLog(zombies) {

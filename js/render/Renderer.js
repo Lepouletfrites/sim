@@ -110,6 +110,14 @@ export class Renderer {
       ctx.fillText(label, b.x + 3, b.y + 3);
     }
 
+    if (city.policeStation >= 0) {
+      const b = city.buildings[city.policeStation];
+      if (b.w >= 34 && b.h >= 14) {
+        ctx.fillStyle = colors.police;
+        ctx.fillText('POLICE', b.x + 3, b.y + 3);
+      }
+    }
+
     if (city.hospital) this.drawHospitalCross(ctx, city.hospital);
   }
 
@@ -131,6 +139,7 @@ export class Renderer {
 
   render(citizens, alpha, simulation) {
     const ctx = this.ctx;
+    this.lastAlpha = alpha;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.staticLayer, 0, 0);
     if (!this.city) return;
@@ -209,6 +218,9 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
 
+    const response = zombies.response;
+    this.drawWalls(ctx, response.walls);
+
     // Zombies : un peu plus gros, cerclés de sombre
     ctx.fillStyle = colors.zombie;
     ctx.strokeStyle = colors.zombieStroke;
@@ -232,6 +244,8 @@ export class Renderer {
       this.drawRings(ctx, citizens, alpha, (c) => c.fighter && c.zombie === ZombieState.HUMAN, colors.fighterRing);
     }
 
+    this.drawUnits(ctx, response);
+
     // Frappes aériennes : onde de choc (temps réel, visible même en pause)
     const now = performance.now();
     const duration = 900;
@@ -245,6 +259,66 @@ export class Renderer {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+  }
+
+  /** Barricades de rue : planches qui pâlissent à mesure qu'elles s'usent. */
+  drawWalls(ctx, walls) {
+    if (walls.length === 0) return;
+    const colors = CONFIG.colors;
+    ctx.lineWidth = 1;
+    for (const w of walls) {
+      ctx.globalAlpha = 0.45 + 0.55 * (w.hp / w.maxHp);
+      ctx.fillStyle = colors.wall;
+      ctx.fillRect(w.x, w.y, w.w, w.h);
+      ctx.strokeStyle = colors.wallStroke;
+      ctx.strokeRect(w.x + 0.5, w.y + 0.5, w.w - 1, w.h - 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Police (ronds bleus cerclés de blanc), armée (carrés kaki), et traçantes des tirs. */
+  drawUnits(ctx, response) {
+    const colors = CONFIG.colors;
+    const units = response.units;
+    const alpha = this.lastAlpha ?? 1;
+
+    // Traçantes (temps réel)
+    const now = performance.now();
+    response.tracers = response.tracers.filter((t) => now - t.start < 160);
+    ctx.lineWidth = 1.2;
+    for (const t of response.tracers) {
+      ctx.strokeStyle = t.kind === 'army' ? colors.armyTracer : colors.policeTracer;
+      ctx.beginPath();
+      ctx.moveTo(t.x1, t.y1);
+      ctx.lineTo(t.x2, t.y2);
+      ctx.stroke();
+    }
+    if (units.length === 0) return;
+
+    ctx.fillStyle = colors.police;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const u of units) {
+      if (u.kind !== 'police') continue;
+      const x = u.px + (u.x - u.px) * alpha;
+      const y = u.py + (u.y - u.py) * alpha;
+      ctx.moveTo(x + u.radius, y);
+      ctx.arc(x, y, u.radius, 0, TAU);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = colors.army;
+    ctx.strokeStyle = colors.armyStroke;
+    for (const u of units) {
+      if (u.kind !== 'army') continue;
+      const x = u.px + (u.x - u.px) * alpha;
+      const y = u.py + (u.y - u.py) * alpha;
+      const s = u.radius * 1.8;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+      ctx.strokeRect(x - s / 2, y - s / 2, s, s);
+    }
   }
 
   /** Comme drawRings, mais aussi pour les habitants à l'intérieur des bâtiments. */

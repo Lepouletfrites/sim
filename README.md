@@ -82,7 +82,19 @@ Humain → **morsure** → Mordu (garde sa vie normale pendant le délai de tran
 - **Remède** : la recherche démarre à l'alerte, et avance d'autant plus vite qu'il reste d'humains. Une fois prêt, les mordus sont soignés et les zombies redeviennent humains peu à peu.
 - **Règles farfelues** : zombies qui craignent le soleil (léthargiques le jour, déchaînés la nuit), attirés par la musique (boîtes et centre commercial ouverts), hôpital-forteresse.
 - **Clic sur la carte** : infecter (virus), transformer en zombie, ou **frappe aérienne** (tout ce qui est dans la rue dans le rayon, humains compris ; les bâtiments protègent).
-- **Journal de l'apocalypse** : premier cas, foyers, barricades enfoncées, paliers, remède, fin de l'alerte.
+- **Journal de l'apocalypse** : premier cas, foyers, barricades enfoncées, paliers, riposte, remède, fin de l'alerte.
+
+#### Riposte par paliers
+
+Chaque force entre en jeu quand la **part de la population transformée** atteint son seuil. Pour chacune, l'interface montre une jauge avec le repère du seuil, un interrupteur, le seuil et l'effectif réglables, et un bilan.
+
+| Palier | Seuil par défaut | Effet |
+|---|---|---|
+| **Police** | 1 % | 8 agents partent du **commissariat** (marqué POLICE sur la carte), rejoignent les zombies par les rues et tirent à 45 px, avec ligne de vue. Vulnérables aux morsures. |
+| **Barricades de rue** | 10 % | Les habitants barrent 12 rues étroites au contact du front, là où il y a le plus de monde à protéger. Seuls les zombies sont bloqués ; ils usent les barricades jusqu'à les faire céder. Reconstruites toutes les 12 h tant que la menace dure. |
+| **Armée** | 25 % | 30 soldats entrent par le **bord de la carte le plus proche du gros de l'invasion**, sur deux rangs. Portée 75 px, cadence ×1,8, blindage (morsures ×0,3). |
+
+Quand il n'y a plus ni zombie ni mordu, les forces se retirent et les barricades sont démontées ; une nouvelle vague relance la riposte. Les unités trouvent les zombies grâce à une carte des distances aux zombies (un seul BFS par tick pour toutes les unités).
 
 Réglages : contagiosité de la morsure, délai de transformation, vitesse et flair des zombies, décomposition, combativité, part de survivalistes, réflexe barricade, solidité des barricades, vitesse de la recherche.
 
@@ -155,7 +167,9 @@ js/
 ├── epidemic/
 │   └── Epidemic.js         Contagion par lieu, gravité, décès, soins, comportements
 ├── zombie/
-│   └── Zombies.js          Apocalypse : chasse, combats, barricades, foyers, remède, journal
+│   ├── ZombieState.js      États (humain, mordu, zombie...)
+│   ├── Zombies.js          Apocalypse : chasse, combats, sièges, foyers, remède, journal
+│   └── Response.js         Riposte : police, barricades de rue, armée
 ├── physics/
 │   └── Collision.js        Collision cercle/rectangle avec glissement
 ├── render/

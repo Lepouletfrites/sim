@@ -3,15 +3,10 @@ import { Random } from '../core/Random.js';
 import { Health, Care } from '../agents/Citizen.js';
 import { PlaceType, PLACE_LABELS, isOpen } from '../world/PlaceTypes.js';
 
-/** Statut d'un habitant vis-à-vis de l'apocalypse. */
-export const ZombieState = Object.freeze({
-  HUMAN: 0,
-  BITTEN: 1,    // mordu : encore humain, se transformera
-  ZOMBIE: 2,
-  DESTROYED: 3, // zombie neutralisé (combat, décomposition, frappe)
-  DEVOURED: 4,  // humain dévoré
-  KILLED: 5,    // civil tué par une frappe aérienne
-});
+import { ZombieState } from './ZombieState.js';
+import { Response } from './Response.js';
+
+export { ZombieState };
 
 /** Curseurs du mode zombie et leur unité (les % sont stockés en 0..1). */
 export const ZOMBIE_SLIDERS = [
@@ -25,8 +20,14 @@ export const ZOMBIE_SLIDERS = [
   { key: 'barricade', unit: '%' },
   { key: 'barricadeStrength', unit: '%' },
   { key: 'research', unit: '%' },
+  { key: 'policeThreshold', unit: '%' },
+  { key: 'policeCount', unit: 'n' },
+  { key: 'wallThreshold', unit: '%' },
+  { key: 'wallCount', unit: 'n' },
+  { key: 'armyThreshold', unit: '%' },
+  { key: 'armyCount', unit: 'n' },
 ];
-export const ZOMBIE_TOGGLES = ['sunFear', 'music', 'fortressHospital'];
+export const ZOMBIE_TOGGLES = ['sunFear', 'music', 'fortressHospital', 'policeOn', 'wallsOn', 'armyOn'];
 
 /** Valeur interne d'un curseur à partir de sa valeur affichée. */
 export const sliderToSetting = (slider, value) => (slider.unit === '%' ? value / 100 : value);
@@ -81,11 +82,14 @@ export class Zombies {
     this.buildingBuffer = [];
     this.occupants = new Map();
     this.counts = {};
+    this.share = 0;
+    this.response = new Response(this);
     this.resetState();
     this.recount();
   }
 
   resetState() {
+    this.response.reset();
     this.active = false;
     this.alarm = false;
     this.routine.zombieAlarm = false;
@@ -172,12 +176,14 @@ export class Zombies {
         civilians++;
       }
     }
+    const troops = this.response.strike(x, y, r);
     this.effects.push({ x, y, r, start: performance.now() });
     this.activate();
     this.log(
       `Frappe aérienne : ${zombies} zombie${zombies > 1 ? 's' : ''} neutralisé${zombies > 1 ? 's' : ''}, ` +
-        `${civilians} civil${civilians > 1 ? 's' : ''} tué${civilians > 1 ? 's' : ''}.`,
-      civilians > zombies ? 'bad' : 'good',
+        `${civilians} civil${civilians > 1 ? 's' : ''} tué${civilians > 1 ? 's' : ''}` +
+        (troops > 0 ? `, ${troops} membre${troops > 1 ? 's' : ''} des forces de l'ordre.` : '.'),
+      civilians + troops > zombies ? 'bad' : 'good',
     );
     this.recount();
   }
@@ -241,6 +247,11 @@ export class Zombies {
     return true;
   }
 
+  /** Pas physique des forces de l'ordre (appelé à chaque sous-étape). */
+  step(dt) {
+    if (this.active) this.response.step(dt);
+  }
+
   // ------------------------------------------------------------------ Tick
 
   tick(dt) {
@@ -272,6 +283,7 @@ export class Zombies {
 
     this.recount();
     this.updateAlarm();
+    this.response.tick(dt, this.share);
     this.updateResearch(hours);
     this.ageMarks(hours);
 
@@ -608,6 +620,8 @@ export class Zombies {
         default: counts.killed++;
       }
     }
+    // Part de la population "vivante" (humains, mordus, zombies) passée zombie : pilote la riposte.
+    this.share = counts.zombies / Math.max(1, counts.humans + counts.bitten + counts.zombies);
   }
 
   sample() {

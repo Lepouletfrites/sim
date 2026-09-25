@@ -122,6 +122,19 @@ export class City {
       if (this.fieldTo(i) !== null) this.byType[b.type].push(i);
     });
 
+    // Commissariat : les bureaux les plus proches du centre (à défaut, l'hôpital).
+    this.policeStation = this.hospitalIndex;
+    let bestD2 = Infinity;
+    for (const i of this.byType[PlaceType.WORK]) {
+      const b = this.buildings[i];
+      const d2 = (b.x + b.w / 2 - this.width / 2) ** 2 + (b.y + b.h / 2 - this.height / 2) ** 2;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        this.policeStation = i;
+      }
+    }
+    if (this.policeStation >= 0) this.buildings[this.policeStation].police = true;
+
     // Tirages pondérés par la surface (un grand immeuble loge plus de monde).
     this.cumulative = {};
     for (const [type, list] of Object.entries(this.byType)) {

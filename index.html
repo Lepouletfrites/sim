@@ -57,6 +57,9 @@
                 <li><i class="dot dot--zombie"></i>Zombie</li>
                 <li><i class="dot dot--ring dot--ring-bitten"></i>Mordu</li>
                 <li><i class="dot dot--ring dot--ring-fighter"></i>Survivaliste</li>
+                <li><i class="unit unit--police"></i>Police</li>
+                <li><i class="unit unit--army"></i>Armée</li>
+                <li><i class="unit unit--wall"></i>Barricade de rue</li>
               </ul>
             </div>
             <div>
@@ -275,7 +278,69 @@
               <button type="button" role="radio" data-click="zombie">Zombie</button>
               <button type="button" role="radio" data-click="strike">Frappe aérienne</button>
             </div>
-            <p class="note">La frappe aérienne neutralise tout ce qui est dans la rue dans un rayon de 45 px, humains compris. Les bâtiments protègent.</p>
+            <p class="note">La frappe aérienne neutralise tout ce qui est dans la rue dans un rayon de 45 px, humains et forces de l'ordre compris. Les bâtiments protègent.</p>
+          </div>
+
+          <div class="card">
+            <h3>Riposte</h3>
+            <p class="note note--top">Population transformée : <b id="zstat-share">0 %</b>. Chaque riposte se déclenche quand la jauge atteint son seuil (repère blanc).</p>
+
+            <div class="response">
+              <div class="response__head">
+                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-policeOn"><span class="switch__track"></span><i class="unit unit--police"></i>Police</label>
+                <span class="badge" id="resp-police-state">en attente</span>
+              </div>
+              <div class="gauge"><div class="gauge__fill" id="resp-police-fill"></div><div class="gauge__mark" id="resp-police-mark"></div></div>
+              <p class="response__stats" id="resp-police-stats">Intervient dès les premiers cas, depuis le commissariat.</p>
+              <div class="response__sliders">
+                <label class="control" for="zslider-policeThreshold">
+                  <span class="control__row"><span>Seuil</span><output id="zvalue-policeThreshold">1 %</output></span>
+                  <input type="range" id="zslider-policeThreshold">
+                </label>
+                <label class="control" for="zslider-policeCount">
+                  <span class="control__row"><span>Agents</span><output id="zvalue-policeCount">8</output></span>
+                  <input type="range" id="zslider-policeCount">
+                </label>
+              </div>
+            </div>
+
+            <div class="response">
+              <div class="response__head">
+                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-wallsOn"><span class="switch__track"></span><i class="unit unit--wall"></i>Barricades de rue</label>
+                <span class="badge" id="resp-walls-state">en attente</span>
+              </div>
+              <div class="gauge"><div class="gauge__fill" id="resp-walls-fill"></div><div class="gauge__mark" id="resp-walls-mark"></div></div>
+              <p class="response__stats" id="resp-walls-stats">Les habitants barrent les rues au contact du front. Seuls les zombies sont bloqués.</p>
+              <div class="response__sliders">
+                <label class="control" for="zslider-wallThreshold">
+                  <span class="control__row"><span>Seuil</span><output id="zvalue-wallThreshold">10 %</output></span>
+                  <input type="range" id="zslider-wallThreshold">
+                </label>
+                <label class="control" for="zslider-wallCount">
+                  <span class="control__row"><span>Barricades</span><output id="zvalue-wallCount">12</output></span>
+                  <input type="range" id="zslider-wallCount">
+                </label>
+              </div>
+            </div>
+
+            <div class="response">
+              <div class="response__head">
+                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-armyOn"><span class="switch__track"></span><i class="unit unit--army"></i>Armée</label>
+                <span class="badge" id="resp-army-state">en attente</span>
+              </div>
+              <div class="gauge"><div class="gauge__fill" id="resp-army-fill"></div><div class="gauge__mark" id="resp-army-mark"></div></div>
+              <p class="response__stats" id="resp-army-stats">Entre par le bord de la carte le plus proche de l'invasion. Blindée, tire plus loin.</p>
+              <div class="response__sliders">
+                <label class="control" for="zslider-armyThreshold">
+                  <span class="control__row"><span>Seuil</span><output id="zvalue-armyThreshold">25 %</output></span>
+                  <input type="range" id="zslider-armyThreshold">
+                </label>
+                <label class="control" for="zslider-armyCount">
+                  <span class="control__row"><span>Soldats</span><output id="zvalue-armyCount">30</output></span>
+                  <input type="range" id="zslider-armyCount">
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="card">

@@ -195,6 +195,16 @@ export const CONFIG = {
     barricade: { min: 0, max: 100, default: 60 },       // % qui se barricadent chez eux à l'alerte
     barricadeStrength: { min: 0, max: 100, default: 75 }, // % : solidité des barricades
     research: { min: 0, max: 100, default: 50 },        // % : vitesse de la recherche du remède
+    // Riposte : seuils en % de la population transformée, effectifs
+    policeThreshold: { min: 0, max: 50, default: 1 },
+    policeCount: { min: 1, max: 30, default: 8 },
+    wallThreshold: { min: 0, max: 60, default: 10 },
+    wallCount: { min: 1, max: 30, default: 12 },
+    armyThreshold: { min: 0, max: 80, default: 25 },
+    armyCount: { min: 5, max: 60, default: 30 },
+    policeOn: true,
+    wallsOn: true,
+    armyOn: true,
     // Interrupteurs par défaut
     sunFear: false,           // léthargiques le jour, déchaînés la nuit
     music: false,             // attirés par les lieux bruyants ouverts
@@ -219,6 +229,18 @@ export const CONFIG = {
     sampleInterval: 1,        // h entre deux points de la courbe
     maxSamples: 300,
     maxEvents: 40,
+
+    // Forces de l'ordre (vitesse en px/s, portée en px, cadence en zombies neutralisés / s)
+    police: { speed: 95, radius: 3.5, range: 45, fireRate: 0.9, armor: 1 },
+    army: { speed: 80, radius: 4, range: 75, fireRate: 1.6, armor: 0.3 },
+    // Barricades de rue : points de vie en "secondes de zombie au contact"
+    wall: {
+      hp: 60,
+      thickness: 6,
+      maxLength: 56,          // on ne barre que les rues étroites (pas les carrefours)
+      spacing: 70,            // px minimum entre deux barricades
+      rebuildEvery: 12,       // h : on reconstruit celles qui ont cédé tant que la menace dure
+    },
   },
 
   navigation: {
@@ -245,6 +267,13 @@ export const CONFIG = {
     fighterRing: '#ff9f43',   // survivaliste
     humanLoss: '#8e1b1b',     // humains dévorés ou tués
     strike: '#ffb142',
+    police: '#4aa3ff',
+    policeTracer: 'rgba(159, 208, 255, 0.9)',
+    army: '#c9b458',
+    armyStroke: '#3d3a1a',
+    armyTracer: 'rgba(255, 209, 102, 0.9)',
+    wall: '#9a6632',
+    wallStroke: '#e0a45e',
     hospitalRing: '#ffffff',  // en route vers l'hôpital
     homeRing: '#f1c40f',      // rentre s'isoler / se confiner
     hospitalCross: '#ecf0f1',
