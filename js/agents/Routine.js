@@ -24,6 +24,8 @@ export class Routine {
     this.rng = new Random(seed ^ 0x68e31da4);
     this.awareness = 0;       // tenu à jour par l'Epidemic
     this.zombieAlarm = false; // tenu à jour par Zombies
+    this.insecurity = 0;      // tenu à jour par Cult : méfaits récents, 0..1
+    this.cult = null;         // planificateur des sectes (prêches, réunions, raids, prison)
     this.onEnter = null;      // callback (citoyen, bâtiment) à l'entrée d'un bâtiment
     this.onRefused = null;    // callback (citoyen, bâtiment) -> true si le refus est pris en charge
     this.occupancy = new Uint16Array(city.buildings.length);
@@ -80,7 +82,12 @@ export class Routine {
   // -------------------------------------------------------------- Planification
 
   replan(c) {
-    const plan = this.plan(c);
+    c.hold = false;
+    let plan = this.plan(c);
+    // On ne retourne pas dans un bâtiment en flammes (ni dans des ruines).
+    if (plan.building >= 0 && plan.activity !== 'raid' && this.isUnsafe(plan.building)) {
+      plan = { building: -1, until: this.clock.time + this.rng.range(0.5, 1.5), activity: 'walk' };
+    }
     c.activity = plan.activity;
     c.activityEnd = plan.until;
     this.goTo(c, plan.building);
@@ -94,6 +101,12 @@ export class Routine {
     const h = clock.hour;
     const now = clock.time;
     const city = this.city;
+
+    // 0. En cellule : rien d'autre ne compte
+    if (c.jailUntil > now && this.cult !== null) {
+      const jail = this.cult.jailPlan(c);
+      if (jail) return jail;
+    }
 
     // 1. Contraintes sanitaires
     switch (c.care) {
@@ -113,12 +126,19 @@ export class Routine {
     if (c.looting && c.lootTarget >= 0) return { building: c.lootTarget, until: Infinity, activity: 'loot' };
     if (c.barricaded) return { building: c.home, until: Infinity, activity: 'barricaded' };
 
-    // Envie de sortir : freinée par la prudence face à l'inquiétude, et par la maladie.
+    // Envie de sortir : freinée par la prudence face à l'inquiétude, par la maladie et l'insécurité.
     const sick = c.health === Health.SYMPTOMATIC;
     const mood =
       (1 - s.prudence * this.awareness * c.caution) *
       (sick ? cfg.sickLeisureFactor : 1) *
-      (this.zombieAlarm ? CONFIG.zombie.alarmLeisure : 1);
+      (this.zombieAlarm ? CONFIG.zombie.alarmLeisure : 1) *
+      (1 - CONFIG.cult.insecurityLeisure * this.insecurity * (0.5 + c.caution));
+
+    // Sectes : prêche, réunion, raid ou rôde nocturne
+    if (this.cult !== null) {
+      const cultPlan = this.cult.plan(c, h);
+      if (cultPlan) return cultPlan;
+    }
 
     // 2. Nuit : dormir, ou sortir en boîte pour les couche-tard
     if (!this.isAwake(c, h)) {
@@ -236,6 +256,17 @@ export class Routine {
   arrive(c) {
     const b = c.destination;
     const building = this.city.buildings[b];
+    if (c.activity === 'preach' || c.activity === 'raid') {
+      // On ne rentre pas : on s'installe devant la porte (prêche, attroupement du raid).
+      c.destination = -1;
+      c.field = null;
+      c.hold = true;
+      return;
+    }
+    if (this.isUnsafe(b)) {
+      this.replan(c);
+      return;
+    }
     if (c.looting) {
       // Pillage : ni horaires ni jauge.
       this.enter(c, b);
@@ -260,6 +291,12 @@ export class Routine {
     this.enter(c, b);
     this.occupancy[b]++;
     if (this.onEnter) this.onEnter(c, b);
+  }
+
+  /** Bâtiment en feu ou en ruine : on n'y entre pas. */
+  isUnsafe(b) {
+    const building = this.city.buildings[b];
+    return building.fire > 0 || building.type === PlaceType.RUIN;
   }
 
   /** Entre dans un bâtiment : l'agent y reste visible et s'y déplace. */

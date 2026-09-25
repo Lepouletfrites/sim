@@ -12,12 +12,6 @@ const ZOMBIE_BANDS = [
   { key: 'humans', label: 'Humains', color: CONFIG.colors.health[0] },
 ];
 
-const CLICK_HINTS = {
-  infect: 'Clic sur la carte : infecter l\'habitant le plus proche (virus)',
-  zombie: 'Clic sur la carte : transformer l\'habitant le plus proche en zombie',
-  strike: 'Clic sur la carte : frappe aérienne (rayon 45 px, humains compris)',
-};
-
 const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
 /** Texte affiché pour la valeur d'un curseur selon son unité. */
@@ -44,7 +38,6 @@ export class ZombiePanel {
       cure: $('#zstat-cure'),
       cureMeter: $('#meter-cure'),
       log: $('#zombie-log'),
-      hint: $('#legend-hint'),
       stats: {},
     };
     for (const key of ['humans', 'zombies', 'bitten', 'lost', 'barricaded', 'looting', 'invaded', 'fighters', 'destroyed', 'devoured', 'killed', 'cured']) {
@@ -85,22 +78,7 @@ export class ZombiePanel {
     $('#btn-zombie').addEventListener('click', onRelease);
     $('#btn-horde').addEventListener('click', onHorde);
     $('#btn-reset-zombies').addEventListener('click', onReset);
-
-    // Action du clic sur la carte
-    this.clickButtons = [...document.querySelectorAll('[data-click]')];
-    for (const button of this.clickButtons) {
-      button.addEventListener('click', () => this.setClickMode(button.dataset.click));
-    }
-    this.setClickMode('infect');
     this.eventsVersion = -1;
-  }
-
-  setClickMode(mode) {
-    this.clickMode = mode;
-    for (const button of this.clickButtons) {
-      button.setAttribute('aria-checked', String(button.dataset.click === mode));
-    }
-    this.el.hint.textContent = CLICK_HINTS[mode];
   }
 
   update(zombies) {

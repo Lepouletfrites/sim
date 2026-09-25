@@ -28,6 +28,7 @@ export class Population {
     this.behavior = new WanderBehavior(city, this.rng);
     this.routine = null; // branché par la Simulation
     this.zombies = null; // idem
+    this.cult = null;    // idem
     this.grid = new SpatialHashGrid(
       city.width,
       city.height,
@@ -112,6 +113,10 @@ export class Population {
         if (this.zombies !== null && this.zombies.steer(c)) {
           // Chasse (zombie), fuite ou attaque (humain).
           if (c.threat !== null && !c.fighter) speed *= panicBoost;
+        } else if (c.prey !== null && this.cult !== null && this.cult.steer(c)) {
+          // Fanatique qui suit un passant dans la nuit.
+        } else if (c.hold) {
+          speed = 0; // prêche, écoute, attroupement devant la cible d'un raid
         } else if (c.field !== null && c.field.steer(c)) {
           // Direction donnée par le champ de flux vers la destination.
         } else if (c.decisionTimer <= 0) {

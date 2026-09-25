@@ -34,6 +34,7 @@
           <div class="mini mini--infected"><span>Infectés</span><b id="kpi-infected">0</b></div>
           <div class="mini mini--dead"><span>Décès</span><b id="kpi-dead">0</b></div>
           <div class="mini mini--zombie" id="kpi-zombies-box" hidden><span>Zombies</span><b id="kpi-zombies">0</b></div>
+          <div class="mini mini--cult" id="kpi-cult-box" hidden><span>Fidèles</span><b id="kpi-cult">0</b></div>
         </div>
       </header>
 
@@ -68,6 +69,17 @@
               </ul>
             </div>
             <div>
+              <h4>Sectes</h4>
+              <ul>
+                <li><i class="dot dot--guru"></i>Gourou</li>
+                <li><i class="dot dot--ring dot--ring-cult"></i>Fidèle</li>
+                <li><i class="unit unit--zealot"></i>Fanatique</li>
+                <li><i class="swatch swatch--hq"></i>QG</li>
+                <li><i class="unit unit--fire"></i>Incendie</li>
+                <li><i class="unit unit--firefighter"></i>Pompiers</li>
+              </ul>
+            </div>
+            <div>
               <h4>Bâtiments</h4>
               <ul>
                 <li><i class="swatch" data-place="home"></i>Logement</li>
@@ -76,6 +88,7 @@
                 <li><i class="swatch" data-place="restaurant"></i>Restaurant</li>
                 <li><i class="swatch" data-place="nightclub"></i>Boîte de nuit</li>
                 <li><i class="swatch" data-place="hospital"></i>Hôpital</li>
+                <li><i class="swatch" data-place="ruin"></i>Ruines</li>
                 <li><i class="swatch swatch--closed"></i>Fermé</li>
               </ul>
             </div>
@@ -95,6 +108,7 @@
       <nav class="tabs" role="tablist" aria-label="Sections du panneau">
         <button type="button" class="tabs__btn" role="tab" id="tab-btn-virus" aria-controls="tab-virus" data-tab="virus">Virus</button>
         <button type="button" class="tabs__btn tabs__btn--zombie" role="tab" id="tab-btn-zombies" aria-controls="tab-zombies" data-tab="zombies">Zombies</button>
+        <button type="button" class="tabs__btn tabs__btn--cult" role="tab" id="tab-btn-cult" aria-controls="tab-cult" data-tab="cult">Sectes</button>
         <button type="button" class="tabs__btn" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
       </nav>
 
@@ -437,6 +451,221 @@
           </div>
         </section>
 
+        <!-- =============================== SECTES =============================== -->
+        <section class="tabpanel" id="tab-cult" role="tabpanel" aria-labelledby="tab-btn-cult" hidden>
+          <div class="subtabs" role="tablist" aria-label="Sectes">
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-cult-follow" aria-controls="sub-cult-follow" data-subtab="cult-follow">Suivi</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-cult-response" aria-controls="sub-cult-response" data-subtab="cult-response">Riposte</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-cult-settings" aria-controls="sub-cult-settings" data-subtab="cult-settings">Réglages</button>
+          </div>
+
+          <!-- Sectes · Suivi -->
+          <div class="subpanel" id="sub-cult-follow" role="tabpanel" aria-labelledby="sub-btn-cult-follow">
+            <div class="status" id="cult-status" data-level="calm">
+              <strong id="cult-status-title">Aucune secte</strong>
+              <span id="cult-status-text">Faites apparaître un gourou pour commencer.</span>
+            </div>
+
+            <div class="tiles">
+              <div class="tile"><span class="tile__label">Fidèles</span><span class="tile__value" id="cstat-members">0</span></div>
+              <div class="tile"><span class="tile__label">dont fanatiques</span><span class="tile__value" id="cstat-zealots">0</span></div>
+              <div class="tile"><span class="tile__label">Curieux</span><span class="tile__value" id="cstat-curious">0</span></div>
+              <div class="tile"><span class="tile__label">Incendies en cours</span><span class="tile__value" id="cstat-burning">0</span></div>
+            </div>
+
+            <div class="card">
+              <h3>Déclencher</h3>
+              <div class="actions">
+                <button type="button" class="btn btn--cult" id="btn-guru">Faire apparaître un gourou</button>
+                <button type="button" class="btn" id="btn-police-raid">Descente de police</button>
+              </div>
+              <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
+              <div class="segmented" role="radiogroup" aria-label="Action du clic sur la carte">
+                <button type="button" role="radio" data-click="guru">Gourou</button>
+                <button type="button" role="radio" data-click="fire">Incendie</button>
+                <button type="button" role="radio" data-click="infect">Virus</button>
+              </div>
+              <p class="note">Jusqu'à 4 sectes rivales. Un clic « Gourou » près d'un habitant en fait le fondateur d'une nouvelle secte.</p>
+            </div>
+
+            <div class="card">
+              <h3>Les sectes</h3>
+              <ul class="cults" id="cult-list">
+                <li class="cults__empty">Aucune secte pour l'instant.</li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <div class="card__head">
+                <h3>Fidèles au fil du temps</h3>
+                <ul class="chips" id="cult-chart-legend"></ul>
+              </div>
+              <div class="chart">
+                <canvas id="cult-chart" aria-label="Évolution du nombre de fidèles de chaque secte, et des curieux"></canvas>
+                <div class="chart__tooltip" id="cult-chart-tooltip" hidden></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Bilan</h3>
+              <div class="meter">
+                <div class="meter__row"><span>Insécurité</span><b id="cstat-insecurity">0 %</b></div>
+                <div class="meter__track"><div class="meter__fill meter__fill--insecurity" id="meter-insecurity"></div></div>
+              </div>
+              <ul class="rows">
+                <li>Incendies déclarés<b id="cstat-fires">0</b></li>
+                <li>Bâtiments en ruine<b id="cstat-ruins">0</b></li>
+                <li>Agressions<b id="cstat-assaults">0</b></li>
+                <li>Morts (agressions, rixes)<b id="cstat-killedViolence">0</b></li>
+                <li>Morts dans les incendies<b id="cstat-killedFire">0</b></li>
+                <li>Interpellations<b id="cstat-arrests">0</b></li>
+                <li>En cellule<b id="cstat-jailed">0</b></li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Journal des sectes</h3>
+              <ol class="log" id="cult-log">
+                <li class="log__empty">Rien à signaler… pour l'instant.</li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- Sectes · Riposte -->
+          <div class="subpanel" id="sub-cult-response" role="tabpanel" aria-labelledby="sub-btn-cult-response" hidden>
+            <div class="card">
+              <p class="note note--top">Insécurité : <b id="cstat-insecurity2">0 %</b>. Elle monte avec les agressions et les incendies, et retombe en une journée ou deux. Elle pousse les habitants à rester chez eux.</p>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ctoggle-policeOn"><span class="switch__track"></span><i class="unit unit--police"></i>Police</label>
+                  <span class="badge" id="cresp-police-state">en attente</span>
+                </div>
+                <div class="gauge"><div class="gauge__fill" id="cresp-police-fill"></div><div class="gauge__mark" id="cresp-police-mark"></div></div>
+                <p class="response__stats" id="cresp-police-stats">Patrouille quand l'insécurité dépasse le seuil et interpelle les fanatiques qui traînent dehors la nuit.</p>
+                <div class="response__sliders">
+                  <label class="control" for="cslider-policeThreshold">
+                    <span class="control__row"><span>Seuil</span><output id="cvalue-policeThreshold">20 %</output></span>
+                    <input type="range" id="cslider-policeThreshold">
+                  </label>
+                  <label class="control" for="cslider-policeCount">
+                    <span class="control__row"><span>Agents</span><output id="cvalue-policeCount">6</output></span>
+                    <input type="range" id="cslider-policeCount">
+                  </label>
+                </div>
+              </div>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ctoggle-raidOn"><span class="switch__track"></span>Descente au QG</label>
+                  <span class="badge" id="cresp-raid-state">en attente</span>
+                </div>
+                <p class="response__stats" id="cresp-raid-stats">Quand une secte cumule assez de méfaits, la police perquisitionne son QG : les membres présents sont embarqués, les locaux saisis.</p>
+                <label class="control" for="cslider-raidThreshold">
+                  <span class="control__row"><span>Méfaits avant la descente</span><output id="cvalue-raidThreshold">6</output></span>
+                  <input type="range" id="cslider-raidThreshold">
+                </label>
+              </div>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ctoggle-firefightersOn"><span class="switch__track"></span><i class="unit unit--firefighter"></i>Pompiers</label>
+                  <span class="badge" id="cresp-fire-state">en attente</span>
+                </div>
+                <p class="response__stats" id="cresp-fire-stats">Partent de la caserne à chaque incendie et se répartissent entre les foyers.</p>
+                <label class="control" for="cslider-firefighterCount">
+                  <span class="control__row"><span>Équipes</span><output id="cvalue-firefighterCount">4</output></span>
+                  <input type="range" id="cslider-firefighterCount">
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sectes · Réglages -->
+          <div class="subpanel" id="sub-cult-settings" role="tabpanel" aria-labelledby="sub-btn-cult-settings" hidden>
+            <div class="card">
+              <h3>Recrutement</h3>
+              <label class="control" for="cslider-charisma">
+                <span class="control__row"><span>Charisme du gourou</span><output id="cvalue-charisma">55 %</output></span>
+                <input type="range" id="cslider-charisma">
+                <span class="control__help">Force de ses prêches au coin des rues. Les passants réceptifs s'arrêtent pour l'écouter.</span>
+              </label>
+              <label class="control" for="cslider-wordOfMouth">
+                <span class="control__row"><span>Bouche-à-oreille</span><output id="cvalue-wordOfMouth">35 %</output></span>
+                <input type="range" id="cslider-wordOfMouth">
+                <span class="control__help">Les fidèles embrigadent collègues et voisins, et prêchent à leur tour le week-end.</span>
+              </label>
+              <label class="control" for="cslider-credulity">
+                <span class="control__row"><span>Crédulité</span><output id="cvalue-credulity">35 %</output></span>
+                <input type="range" id="cslider-credulity">
+                <span class="control__help">Part de la population réceptive (surtout les jeunes et les isolés). Les autres restent de marbre.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Emprise</h3>
+              <label class="control" for="cslider-hold">
+                <span class="control__row"><span>Emprise</span><output id="cvalue-hold">60 %</output></span>
+                <input type="range" id="cslider-hold">
+                <span class="control__help">Sans réunions, la ferveur s'use et les fidèles finissent par partir. Plus l'emprise est forte, moins ils partent.</span>
+              </label>
+              <label class="control" for="cslider-tithe">
+                <span class="control__row"><span>Dîme</span><output id="cvalue-tithe">50 %</output></span>
+                <input type="range" id="cslider-tithe">
+                <span class="control__help">Argent versé par chaque fidèle : il paie le QG et les annexes.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Croissance</h3>
+              <label class="control" for="cslider-hqMembers">
+                <span class="control__row"><span>Fidèles pour acheter un QG</span><output id="cvalue-hqMembers">12</output></span>
+                <input type="range" id="cslider-hqMembers">
+                <span class="control__help">Le gourou y emménage et y tient les réunions du soir. Une annexe à chaque palier supplémentaire.</span>
+              </label>
+              <label class="control" for="cslider-gangMembers">
+                <span class="control__row"><span>Fidèles pour devenir un gang</span><output id="cvalue-gangMembers">35</output></span>
+                <input type="range" id="cslider-gangMembers">
+                <span class="control__help">Au-delà, les plus radicaux deviennent fanatiques, s'installent au QG et sortent la nuit.</span>
+              </label>
+              <label class="control" for="cslider-radicalization">
+                <span class="control__row"><span>Radicalisation</span><output id="cvalue-radicalization">35 %</output></span>
+                <input type="range" id="cslider-radicalization">
+                <span class="control__help">Part des fidèles (les moins civiques) qui deviennent fanatiques.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Chaos</h3>
+              <label class="control" for="cslider-arson">
+                <span class="control__row"><span>Pyromanie</span><output id="cvalue-arson">55 %</output></span>
+                <input type="range" id="cslider-arson">
+                <span class="control__help">Chance qu'un raid nocturne finisse en incendie (sinon : vitrines brisées et tags).</span>
+              </label>
+              <label class="control" for="cslider-violence">
+                <span class="control__row"><span>Violence</span><output id="cvalue-violence">35 %</output></span>
+                <input type="range" id="cslider-violence">
+                <span class="control__help">Agressions des passants la nuit ; parfois mortelles.</span>
+              </label>
+              <label class="control" for="cslider-fireSpread">
+                <span class="control__row"><span>Propagation du feu</span><output id="cvalue-fireSpread">40 %</output></span>
+                <input type="range" id="cslider-fireSpread">
+                <span class="control__help">Le feu saute aux bâtiments voisins : redoutable dans une ville dense.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Règles farfelues</h3>
+              <label class="switch"><input type="checkbox" id="ctoggle-fearBoost"><span class="switch__track"></span>La peur fait recette<span class="switch__help">Épidémie, zombies et insécurité rendent les gens bien plus crédules</span></label>
+              <label class="switch"><input type="checkbox" id="ctoggle-prophecy"><span class="switch__track"></span>Prophétie de fin du monde<span class="switch__help">Si une catastrophe tombe le jour dit, la secte explose ; sinon, désillusion… et nouvelle date</span></label>
+              <label class="switch"><input type="checkbox" id="ctoggle-martyr"><span class="switch__track"></span>Martyrs<span class="switch__help">Gourou arrêté ou tué : un successeur prend sa place et les fidèles crient vengeance</span></label>
+              <label class="switch"><input type="checkbox" id="ctoggle-rivalry"><span class="switch__track"></span>Guerre des sectes<span class="switch__help">Les fanatiques rivaux se battent et incendient les QG adverses</span></label>
+            </div>
+
+            <button type="button" class="btn btn--block" id="btn-reset-cult">Dissoudre les sectes (tout réinitialiser)</button>
+          </div>
+        </section>
+
         <!-- =============================== VILLE =============================== -->
         <section class="tabpanel" id="tab-city" role="tabpanel" aria-labelledby="tab-btn-city" hidden>
           <div class="card">
@@ -484,7 +713,7 @@
         <span><b id="stat-steps">0</b> pas/frame</span>
         <span><b id="stat-buildings">0</b> bâtiments</span>
         <span>graine <b id="stat-seed">—</b></span>
-        <span class="sidebar__keys"><kbd>Espace</kbd> pause · <kbd>1</kbd>–<kbd>5</kbd> vitesse · <kbd>I</kbd> infecter</span>
+        <span class="sidebar__keys"><kbd>Espace</kbd> pause · <kbd>1</kbd>–<kbd>5</kbd> vitesse · <kbd>I</kbd> infecter · <kbd>G</kbd> gourou</span>
       </footer>
     </aside>
   </div>

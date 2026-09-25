@@ -2,8 +2,21 @@ import { CONFIG } from '../config.js';
 import { Health, Care } from '../agents/Citizen.js';
 import { PlaceType, MAP_LABELS, isOpen } from '../world/PlaceTypes.js';
 import { ZombieState } from '../zombie/Zombies.js';
+import { CultRank } from '../cult/Cult.js';
 
 const TAU = Math.PI * 2;
+
+/** "#rrggbb" -> "rgba(r, g, b, a)". */
+function hexAlpha(hex, a) {
+  const p = parseInt(hex.slice(1), 16);
+  return `rgba(${(p >> 16) & 255}, ${(p >> 8) & 255}, ${p & 255}, ${a})`;
+}
+
+/** Pseudo-aléatoire stable (flammes, tags) : même entrée, même sortie. */
+function hash(a, b) {
+  const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return s - Math.floor(s);
+}
 const HEALTH_DRAW_ORDER = [Health.SUSCEPTIBLE, Health.RECOVERED, Health.INCUBATING, Health.SYMPTOMATIC];
 const VENUES = [PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
 
@@ -65,6 +78,7 @@ export class Renderer {
 
     const city = this.city;
     if (!city) return;
+    this.cityVersion = city.version;
 
     // Marquage central des avenues (sous les îlots : il disparaît là où deux îlots ont fusionné)
     ctx.strokeStyle = colors.roadMark;
@@ -100,6 +114,7 @@ export class Renderer {
       ctx.strokeStyle = style.stroke;
       ctx.fillRect(b.x, b.y, b.w, b.h);
       ctx.strokeRect(b.x + 0.75, b.y + 0.75, b.w - 1.5, b.h - 1.5);
+      if (b.type === PlaceType.RUIN) this.drawRuin(ctx, b);
     }
 
     // Étiquettes des lieux de sortie
@@ -117,6 +132,13 @@ export class Renderer {
       if (b.w >= 34 && b.h >= 14) {
         ctx.fillStyle = colors.police;
         ctx.fillText('POLICE', b.x + 3, b.y + 3);
+      }
+    }
+    if (city.fireStation >= 0) {
+      const b = city.buildings[city.fireStation];
+      if (b.w >= 50 && b.h >= 14) {
+        ctx.fillStyle = colors.firefighter;
+        ctx.fillText('POMPIERS', b.x + 3, b.y + 3);
       }
     }
 
@@ -163,6 +185,25 @@ export class Renderer {
     ctx.stroke();
   }
 
+  /** Ruine : murs noircis, gravats. */
+  drawRuin(ctx, b) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120, 70, 40, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const n = Math.max(2, Math.round((b.w + b.h) / 16));
+    for (let k = 0; k < n; k++) {
+      const x = b.x + 2 + hash(b.index, k) * (b.w - 4);
+      const y = b.y + 2 + hash(k, b.index) * (b.h - 4);
+      const len = 3 + hash(b.index + k, 7) * 6;
+      const a = hash(k, b.index + 3) * TAU;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   drawHospitalCross(ctx, h) {
     const colors = CONFIG.colors;
     const cx = h.x + h.w / 2;
@@ -182,6 +223,8 @@ export class Renderer {
   render(citizens, alpha, simulation) {
     const ctx = this.ctx;
     this.lastAlpha = alpha;
+    // Un bâtiment a changé de type (acheté, en ruine…) : on redessine le calque statique.
+    if (this.city && this.city.version !== this.cityVersion) this.renderStatic();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.drawImage(this.staticLayer, 0, 0);
     if (!this.city) return;
@@ -216,6 +259,9 @@ export class Renderer {
       }
     }
 
+    const cult = simulation.cult && simulation.cult.active ? simulation.cult : null;
+    if (cult) this.drawCultGround(ctx, cult);
+
     if (simulation.epidemic) this.drawDeathMarks(ctx, simulation.epidemic.deathMarks);
     if (!citizens || citizens.length === 0) return;
 
@@ -243,6 +289,252 @@ export class Renderer {
     );
 
     if (simulation.zombies && simulation.zombies.active) this.drawZombies(ctx, citizens, alpha, simulation.zombies);
+    if (cult) this.drawCultAgents(ctx, citizens, alpha, cult);
+  }
+
+  // ------------------------------------------------------------------ Sectes
+
+  /** Sous les habitants : locaux des sectes, tags, incendies et fumée. */
+  drawCultGround(ctx, cult) {
+    const colors = CONFIG.colors;
+    const buildings = this.city.buildings;
+    const t = performance.now() / 1000;
+
+    // Locaux : teinte et liseré aux couleurs de la secte, "QG" sur le siège
+    ctx.font = '700 8px system-ui, sans-serif';
+    ctx.textBaseline = 'top';
+    for (const k of cult.cults) {
+      if (k.dissolved || k.hq < 0) continue;
+      for (const index of [k.hq, ...k.annexes]) {
+        const b = buildings[index];
+        const hq = index === k.hq;
+        ctx.fillStyle = hexAlpha(k.color, hq ? 0.2 : 0.12);
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+        ctx.strokeStyle = k.color;
+        ctx.lineWidth = hq ? 2 : 1.2;
+        ctx.setLineDash(hq ? [] : [3, 3]);
+        ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+        ctx.setLineDash([]);
+        if (b.w >= 18 && b.h >= 12) {
+          ctx.fillStyle = k.color;
+          ctx.fillText(hq ? 'QG' : 'ANNEXE', b.x + 3, b.y + 3);
+        }
+        if (hq) this.drawSigil(ctx, b.x + b.w / 2, b.y + b.h / 2, Math.min(b.w, b.h) * 0.18, k.color);
+      }
+    }
+
+    // Tags sur les façades
+    ctx.lineWidth = 1.3;
+    for (const tag of cult.tags) {
+      ctx.strokeStyle = tag.color;
+      ctx.beginPath();
+      ctx.moveTo(tag.x - 3, tag.y + 1);
+      for (let k = 1; k <= 4; k++) {
+        ctx.lineTo(tag.x - 3 + k * 1.6, tag.y + (k % 2 ? -1.5 : 1.5) * (0.6 + tag.seed));
+      }
+      ctx.stroke();
+    }
+
+    // Incendies : lueur vacillante, flammes, noircissement, fumée
+    for (const index of cult.fires.burning) {
+      const b = buildings[index];
+      const f = b.fire;
+      const flicker = 0.75 + 0.25 * Math.sin(t * 13 + index * 1.7) * Math.sin(t * 7.3 + index);
+      ctx.fillStyle = `rgba(0, 0, 0, ${(0.5 * Math.min(1, b.burn)).toFixed(3)})`;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.fillStyle = `rgba(255, 96, 20, ${((0.2 + 0.4 * f) * flicker).toFixed(3)})`;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+
+      const flames = Math.round(Math.min(16, Math.max(3, (b.w * b.h) / 220)) * (0.4 + 0.6 * f));
+      for (let k = 0; k < flames; k++) {
+        const fx = b.x + 2 + hash(index, k) * (b.w - 4);
+        const phase = t * (2 + hash(k, index) * 3) + k;
+        const fy = b.y + 2 + hash(k, index + 1) * (b.h - 4) - (phase % 1) * 4;
+        const r = (1.5 + 2.5 * f) * (1 - (phase % 1) * 0.6);
+        ctx.fillStyle = k % 3 === 0 ? colors.fireCore : colors.fire;
+        ctx.beginPath();
+        ctx.arc(fx, fy, r, 0, TAU);
+        ctx.fill();
+      }
+      // Fumée qui monte et s'étale
+      for (let k = 0; k < 4; k++) {
+        const life = (t * 0.35 + k / 4 + hash(index, k + 9)) % 1;
+        const sx = b.x + b.w * (0.3 + 0.4 * hash(index, k + 5)) + Math.sin(t + k) * 3;
+        const sy = b.y + b.h / 2 - life * 26;
+        ctx.fillStyle = colors.smoke.replace('ALPHA', (0.35 * f * (1 - life)).toFixed(3));
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3 + life * 7, 0, TAU);
+        ctx.fill();
+      }
+    }
+  }
+
+  /** Symbole de secte : un œil dans un triangle. */
+  drawSigil(ctx, x, y, size, color) {
+    if (size < 3) return;
+    ctx.save();
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - size);
+    ctx.lineTo(x + size * 0.95, y + size * 0.65);
+    ctx.lineTo(x - size * 0.95, y + size * 0.65);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x, y + size * 0.1, size * 0.42, size * 0.22, 0, 0, TAU);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y + size * 0.1, size * 0.1, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Au-dessus des habitants : curieux, fidèles, fanatiques, gourous, secours, victimes. */
+  drawCultAgents(ctx, citizens, alpha, cult) {
+    const colors = CONFIG.colors;
+    const t = performance.now() / 1000;
+    const pos = (c) => [c.px + (c.x - c.px) * alpha, c.py + (c.y - c.py) * alpha];
+
+    // Victimes
+    const life = CONFIG.zombie.markLife;
+    ctx.fillStyle = colors.humanLoss;
+    for (const m of cult.marks) {
+      ctx.globalAlpha = 0.8 * (1 - m.age / life);
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 4, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    const curiousAt = CONFIG.cult.curiousAt;
+    for (const k of cult.cults) {
+      if (k.dissolved) continue;
+      // Curieux : anneau pâle
+      ctx.strokeStyle = hexAlpha(k.color, 0.4);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const c of citizens) {
+        if (c.cult >= 0 || c.leaning !== k.id || c.conviction < curiousAt || !c.alive) continue;
+        const [x, y] = pos(c);
+        ctx.moveTo(x + c.radius + 1.5, y);
+        ctx.arc(x, y, c.radius + 1.5, 0, TAU);
+      }
+      ctx.stroke();
+
+      // Fidèles : anneau plein
+      ctx.strokeStyle = k.color;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      for (const c of citizens) {
+        if (c.cult !== k.id || c.cultRank !== CultRank.FOLLOWER || !c.alive) continue;
+        const [x, y] = pos(c);
+        ctx.moveTo(x + c.radius + 1.6, y);
+        ctx.arc(x, y, c.radius + 1.6, 0, TAU);
+      }
+      ctx.stroke();
+
+      // Fanatiques : losange
+      ctx.fillStyle = k.color;
+      ctx.strokeStyle = '#1a0d12';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const c of citizens) {
+        if (c.cult !== k.id || c.cultRank !== CultRank.ZEALOT || !c.alive) continue;
+        const [x, y] = pos(c);
+        const s = c.radius + 1.8;
+        ctx.moveTo(x, y - s);
+        ctx.lineTo(x + s, y);
+        ctx.lineTo(x, y + s);
+        ctx.lineTo(x - s, y);
+        ctx.closePath();
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Gourou : halo pulsant ; en plein prêche, sa portée
+      const g = k.guru;
+      if (g && g.alive) {
+        const [x, y] = pos(g);
+        if (g.activity === 'preach' && g.hold) {
+          ctx.strokeStyle = hexAlpha(k.color, 0.28);
+          ctx.setLineDash([4, 5]);
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(x, y, CONFIG.cult.preachRadius, 0, TAU);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
+        const pulse = 0.5 + 0.5 * Math.sin(t * 4 + k.id);
+        ctx.fillStyle = colors.guruGlow.replace('ALPHA', (0.25 + 0.3 * pulse).toFixed(3));
+        ctx.beginPath();
+        ctx.arc(x, y, g.radius + 4 + 2 * pulse, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = k.color;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(x, y, g.radius + 1.5, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+
+    this.drawCultUnits(ctx, cult.response);
+  }
+
+  /** Police (ronds bleus) et pompiers (carrés rouges, avec leur jet d'eau). */
+  drawCultUnits(ctx, response) {
+    const units = response.units;
+    if (units.length === 0) return;
+    const colors = CONFIG.colors;
+    const alpha = this.lastAlpha ?? 1;
+    const buildings = this.city.buildings;
+    const t = performance.now() / 1000;
+
+    ctx.strokeStyle = colors.spray;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([2, 3]);
+    ctx.lineDashOffset = -t * 20;
+    ctx.beginPath();
+    for (const u of units) {
+      if (u.kind !== 'firefighter' || !u.spraying || u.goal < 0) continue;
+      const b = buildings[u.goal];
+      const tx = Math.min(Math.max(u.x, b.x + 4), b.x + b.w - 4);
+      const ty = Math.min(Math.max(u.y, b.y + 4), b.y + b.h - 4);
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(tx, ty);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineDashOffset = 0;
+
+    ctx.fillStyle = colors.police;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const u of units) {
+      if (u.kind !== 'police') continue;
+      const x = u.px + (u.x - u.px) * alpha;
+      const y = u.py + (u.y - u.py) * alpha;
+      ctx.moveTo(x + u.radius, y);
+      ctx.arc(x, y, u.radius, 0, TAU);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = colors.firefighter;
+    ctx.strokeStyle = colors.firefighterStroke;
+    for (const u of units) {
+      if (u.kind !== 'firefighter') continue;
+      const x = u.px + (u.x - u.px) * alpha;
+      const y = u.py + (u.y - u.py) * alpha;
+      const s = u.radius * 1.8;
+      ctx.fillRect(x - s / 2, y - s / 2, s, s);
+      ctx.strokeRect(x - s / 2, y - s / 2, s, s);
+    }
   }
 
   /** Apocalypse : traces, zombies, mordus, survivalistes et frappes aériennes. */

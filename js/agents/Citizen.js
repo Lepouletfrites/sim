@@ -113,6 +113,24 @@ export class Citizen {
     this.looting = false;   // part piller pour se nourrir
     this.lootTarget = -1;
     this.lootTimer = 0;
+
+    // Sectes (voir Cult.js)
+    this.gullibility = 0;   // plus il est haut, plus l'habitant se laisse convaincre
+    this.cult = -1;         // secte dont il est membre
+    this.cultRank = 0;      // CultRank
+    this.conviction = 0;    // attirance pour `leaning` (curieux) ou ferveur (membre), 0..1
+    this.leaning = -1;      // secte qui l'attire
+    this.apostate = false;  // a déjà quitté une secte : échaudé
+    this.formerHome = -1;   // domicile avant d'emménager au QG
+    this.raid = null;       // fanatique : raid nocturne en cours
+    this.prey = null;       // fanatique : passant qu'il suit dans la nuit
+    this.meetingDay = -1;   // jour où il a décidé d'aller (ou non) à la réunion du soir
+    this.goMeeting = false;
+    this.jailUntil = 0;     // h de jeu : en cellule au commissariat
+    this.jailTotal = 0;     // durée de la peine en cours (h)
+    this.hold = false;      // immobile dans la rue (prêche, écoute, raid)
+    this.holdUntil = 0;
+    this.killedBy = '';     // mort violente (hors virus et zombies) : 'assault', 'fire', 'brawl'…
   }
 
   get alive() {

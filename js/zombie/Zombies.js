@@ -596,6 +596,11 @@ export class Zombies {
     c.destination = -1;
     c.field = null;
     c.musicVenue = -1;
+    c.hold = false;
+    c.holdUntil = 0;
+    c.raid = null;
+    c.prey = null;
+    c.jailUntil = 0;
 
     // Transformation à l'intérieur : le zombie reste dans la pièce, avec les occupants.
     if (where >= 0) {

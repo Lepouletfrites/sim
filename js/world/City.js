@@ -140,12 +140,46 @@ export class City {
     }
     if (this.policeStation >= 0) this.buildings[this.policeStation].police = true;
 
+    // Caserne de pompiers : d'autres bureaux, dans l'autre moitié de la ville.
+    this.fireStation = -1;
+    bestD2 = Infinity;
+    for (const i of this.byType[PlaceType.WORK]) {
+      if (i === this.policeStation) continue;
+      const b = this.buildings[i];
+      const d2 = (b.x + b.w / 2 - this.width * 0.3) ** 2 + (b.y + b.h / 2 - this.height * 0.7) ** 2;
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        this.fireStation = i;
+      }
+    }
+
     // Tirages pondérés par la surface (un grand immeuble loge plus de monde).
     this.cumulative = {};
-    for (const [type, list] of Object.entries(this.byType)) {
-      let sum = 0;
-      this.cumulative[type] = list.map((i) => (sum += area(i)));
-    }
+    for (const type of Object.keys(this.byType)) this.rebuildCumulative(type);
+    this.version = 0; // incrémenté à chaque changement de type (rendu statique à refaire)
+  }
+
+  rebuildCumulative(type) {
+    let sum = 0;
+    this.cumulative[type] = this.byType[type].map((i) => (sum += this.buildings[i].w * this.buildings[i].h));
+  }
+
+  /** Change le type d'un bâtiment en cours de partie (achat par une secte, ruine…). */
+  convertPlace(index, type) {
+    const b = this.buildings[index];
+    const old = b.type;
+    if (old === type) return;
+    const list = this.byType[old];
+    const at = list.indexOf(index);
+    if (at >= 0) list.splice(at, 1);
+    b.type = type;
+    if (this.fieldTo(index) !== null) this.byType[type].push(index);
+    b.capacity = type === PlaceType.MALL || type === PlaceType.RESTAURANT || type === PlaceType.NIGHTCLUB
+      ? Math.max(6, Math.floor(b.w * b.h * CONFIG.places.capacityPerArea))
+      : Infinity;
+    this.rebuildCumulative(old);
+    this.rebuildCumulative(type);
+    this.version++;
   }
 
   /** Bâtiment d'un type donné, tiré au hasard proportionnellement à sa surface (-1 si aucun). */

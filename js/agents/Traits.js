@@ -43,4 +43,6 @@ export function rollTraits(citizen, rng, city) {
   citizen.wake = range(profile.wake);
   citizen.bedtime = range(profile.bedtime);
   citizen.nightOwl = citizen.age !== 'senior' && citizen.sociability > cfg.nightOwlSociability;
+  // Crédulité : les jeunes et les isolés (peu sociables) se laissent plus facilement embrigader.
+  citizen.gullibility = clamp01(rng.next() * 0.85 + (citizen.age === 'young' ? 0.12 : 0) + (0.5 - citizen.sociability) * 0.1);
 }

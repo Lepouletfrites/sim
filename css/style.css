@@ -276,7 +276,7 @@ kbd {
 
 .legend-box__body {
   display: grid;
-  grid-template-columns: repeat(3, auto);
+  grid-template-columns: repeat(4, auto);
   gap: 4px 20px;
 }
 
@@ -340,7 +340,7 @@ kbd {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -1292,6 +1292,139 @@ input[type="range"] {
   outline: 1px solid #e0a45e;
 }
 
+/* ================================ Sectes ================================ */
+
+.tabs__btn--cult[aria-selected="true"] {
+  border-bottom-color: #d35cff;
+}
+
+.mini--cult {
+  --mark: #d35cff;
+}
+
+.mini--cult b::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--mark);
+}
+
+.btn--cult {
+  color: #1c0824;
+  border-color: #d35cff;
+  background: #d35cff;
+}
+
+.btn--cult:hover {
+  background: #de7dff;
+  border-color: #de7dff;
+}
+
+.status[data-level="sect"] { --status-color: #d35cff; }
+
+.log li[data-kind="cult"] { --log-color: #d35cff; }
+.log li[data-kind="fire"] { --log-color: #ff7a1a; }
+
+.meter__fill--insecurity {
+  background: linear-gradient(90deg, #f1c40f, #e74c3c);
+}
+
+/* Légende */
+.dot--guru {
+  background: #d35cff;
+  box-shadow: 0 0 0 1.5px #ffffff, 0 0 0 4px rgba(255, 224, 138, 0.45);
+}
+
+.dot--ring-cult {
+  background: #3498db;
+  --ring-color: #d35cff;
+}
+
+.unit--zealot {
+  width: 8px;
+  height: 8px;
+  margin: 0 1px;
+  background: #d35cff;
+  outline: 1px solid #1a0d12;
+  transform: rotate(45deg);
+}
+
+.unit--fire {
+  width: 10px;
+  height: 10px;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 50% 70%, #ffd23f 0 30%, #ff7a1a 60%, rgba(255, 122, 26, 0.2) 100%);
+}
+
+.unit--firefighter {
+  background: #e8322b;
+  outline: 1px solid #ffd9d6;
+}
+
+.swatch--hq {
+  background: rgba(211, 92, 255, 0.2);
+  border: 2px solid #d35cff;
+}
+
+/* Fiches des sectes */
+.cults {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.cults__empty {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.cults__item {
+  padding: 8px 10px;
+  border-left: 3px solid var(--cult-color, #d35cff);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cults__item.is-dissolved {
+  opacity: 0.55;
+}
+
+.cults__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cults__head b {
+  color: var(--cult-color, #d35cff);
+  font-size: 13px;
+}
+
+.cults__meta,
+.cults__numbers,
+.cults__prophecy {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.cults__numbers {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.cults__prophecy {
+  color: #ffe08a;
+  font-style: italic;
+}
+
 /* ============================== Responsive ============================== */
 
 @media (max-width: 1100px) {
@@ -1337,6 +1470,10 @@ input[type="range"] {
 
   .legend-box:not([open]) {
     padding: 6px 10px;
+  }
+
+  .legend-box__body {
+    grid-template-columns: repeat(2, auto);
   }
 
   .sidebar {

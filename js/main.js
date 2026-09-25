@@ -50,6 +50,10 @@ const ui = new UI({
   onReleaseZombie: () => zombieAction((z) => z.releaseZombie()),
   onHorde: () => zombieAction((z) => z.releaseHorde(10)),
   onResetZombies: () => zombieAction((z) => z.reset()),
+  onCultSetting: (name, value) => simulation.setCultSetting(name, value),
+  onGuru: () => cultAction((c) => c.spawnGuru()),
+  onPoliceRaid: () => cultAction((c) => c.forceRaid()),
+  onResetCult: () => cultAction((c) => c.reset()),
 });
 
 function zombieAction(action) {
@@ -58,7 +62,13 @@ function zombieAction(action) {
   refreshStats();
 }
 
-// Clic sur la carte : selon le mode choisi dans l'onglet Zombies.
+function cultAction(action) {
+  if (!simulation.cult) return;
+  action(simulation.cult);
+  refreshStats();
+}
+
+// Clic sur la carte : selon le mode choisi (onglets Zombies et Sectes).
 canvas.addEventListener('click', (event) => {
   const { offsetX: x, offsetY: y } = event;
   switch (ui.clickMode) {
@@ -67,6 +77,12 @@ canvas.addEventListener('click', (event) => {
       break;
     case 'strike':
       zombieAction((z) => z.airStrike(x, y));
+      break;
+    case 'guru':
+      cultAction((c) => c.spawnGuru(x, y));
+      break;
+    case 'fire':
+      cultAction((c) => c.fireAt(x, y));
       break;
     default:
       if (simulation.epidemic && simulation.epidemic.infectAt(x, y, 30)) refreshStats();

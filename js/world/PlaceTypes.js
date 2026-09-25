@@ -8,6 +8,8 @@ export const PlaceType = Object.freeze({
   RESTAURANT: 'restaurant',
   NIGHTCLUB: 'nightclub',
   HOSPITAL: 'hospital',
+  TEMPLE: 'temple', // bâtiment acheté par une secte
+  RUIN: 'ruin',     // bâtiment détruit par le feu
 });
 
 /** Lieu "rue" (hors de tout bâtiment), utilisé pour les statistiques. */
@@ -20,6 +22,8 @@ export const PLACE_LABELS = {
   restaurant: 'Restaurants',
   nightclub: 'Boîte de nuit',
   hospital: 'Hôpital',
+  temple: 'Locaux de secte',
+  ruin: 'Ruines',
   street: 'Rue et places',
 };
 

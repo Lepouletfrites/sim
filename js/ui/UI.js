@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { EpidemicChart, CHART_BANDS } from './EpidemicChart.js';
 import { ZombiePanel } from './ZombiePanel.js';
+import { CultPanel } from './CultPanel.js';
 import { PlaceType, STREET, PLACE_LABELS, describeSchedule, isOpen } from '../world/PlaceTypes.js';
 import { CONTAGION_PLACES } from '../epidemic/Epidemic.js';
 import { Health } from '../agents/Citizen.js';
@@ -14,8 +15,16 @@ const POLICIES = ['closeNightclubs', 'closeCommerce', 'telework'];
 const CITY_SLIDERS = ['density', 'chaos', 'green'];
 const PLACES_SHOWN = [
   PlaceType.HOME, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT,
-  PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, STREET,
+  PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, PlaceType.TEMPLE, STREET,
 ];
+/** Action du clic sur la carte (les boutons [data-click] de tous les onglets restent synchronisés). */
+const CLICK_HINTS = {
+  infect: 'Clic sur la carte : infecter l\'habitant le plus proche (virus)',
+  zombie: 'Clic sur la carte : transformer l\'habitant le plus proche en zombie',
+  strike: 'Clic sur la carte : frappe aérienne (rayon 45 px, humains compris)',
+  guru: 'Clic sur la carte : l\'habitant le plus proche fonde une secte',
+  fire: 'Clic sur la carte : mettre le feu au bâtiment',
+};
 /** Compteurs affichés tels quels : clé de `epidemic.counts` = suffixe de l'id. */
 const COUNTS = [
   'susceptible', 'carriers', 'sickOut', 'recovered', 'toHospital',
@@ -99,12 +108,22 @@ export class UI {
     onReleaseZombie,
     onHorde,
     onResetZombies,
+    onCultSetting,
+    onGuru,
+    onPoliceRaid,
+    onResetCult,
   }) {
     this.zombiePanel = new ZombiePanel({
       onSetting: onZombieSetting,
       onRelease: onReleaseZombie,
       onHorde,
       onReset: onResetZombies,
+    });
+    this.cultPanel = new CultPanel({
+      onSetting: onCultSetting,
+      onGuru,
+      onPoliceRaid,
+      onReset: onResetCult,
     });
     this.el = {
       clock: $('#hud-clock'),
@@ -116,6 +135,9 @@ export class UI {
       kpiDead: $('#kpi-dead'),
       kpiZombies: $('#kpi-zombies'),
       kpiZombiesBox: $('#kpi-zombies-box'),
+      kpiCult: $('#kpi-cult'),
+      kpiCultBox: $('#kpi-cult-box'),
+      hint: $('#legend-hint'),
       pauseBadge: $('#pause-badge'),
       active: $('#stat-active'),
       dead: $('#stat-dead'),
@@ -142,6 +164,12 @@ export class UI {
     this.buildContagionBars();
     this.applyLegendColors();
     this.setupSliders();
+
+    this.clickButtons = [...document.querySelectorAll('[data-click]')];
+    for (const button of this.clickButtons) {
+      button.addEventListener('click', () => this.setClickMode(button.dataset.click));
+    }
+    this.setClickMode('infect');
 
     // Sur petit écran, la légende repliée laisse la carte visible.
     if (window.matchMedia('(max-width: 860px)').matches) $('#map-legend').open = false;
@@ -205,6 +233,8 @@ export class UI {
         onTimeScale(SPEED_KEYS[event.key]);
       } else if (event.key === 'i' || event.key === 'I') {
         onInfect();
+      } else if (event.key === 'g' || event.key === 'G') {
+        onGuru();
       }
     });
   }
@@ -418,10 +448,21 @@ export class UI {
       this.el.kpiZombies.textContent = zombies.counts.zombies;
       this.zombiePanel.update(zombies);
     }
+
+    // Sectes
+    const cult = simulation.cult;
+    if (cult) {
+      this.el.kpiCultBox.hidden = !cult.active;
+      this.el.kpiCult.textContent = cult.counts.members;
+      this.cultPanel.update(cult);
+    }
   }
 
-  /** Action du clic sur la carte : 'infect', 'zombie' ou 'strike'. */
-  get clickMode() {
-    return this.zombiePanel.clickMode;
+  setClickMode(mode) {
+    this.clickMode = mode;
+    for (const button of this.clickButtons) {
+      button.setAttribute('aria-checked', String(button.dataset.click === mode));
+    }
+    this.el.hint.textContent = CLICK_HINTS[mode];
   }
 }

@@ -4,6 +4,7 @@ import { Population } from '../agents/Population.js';
 import { Routine } from '../agents/Routine.js';
 import { Epidemic } from '../epidemic/Epidemic.js';
 import { Zombies, defaultZombieSettings } from '../zombie/Zombies.js';
+import { Cult, defaultCultSettings } from '../cult/Cult.js';
 
 /**
  * Orchestre le temps simulé : timeScale + accumulateur à pas fixe.
@@ -21,6 +22,8 @@ export class Simulation {
     this.epidemic = null;
     this.zombies = null;
     this.zombieSettings = defaultZombieSettings();
+    this.cult = null;
+    this.cultSettings = defaultCultSettings();
     this.timeScale = CONFIG.simulation.defaultTimeScale;
     this.accumulator = 0;
     this.tickTimer = 0;
@@ -52,6 +55,10 @@ export class Simulation {
       this.population, city, this.clock, this.routine, seed, this.zombieSettings, this.settings,
     );
     this.population.zombies = this.zombies;
+    this.cult = new Cult(
+      this.population, city, this.clock, this.routine, seed, this.cultSettings, this.epidemic, this.zombies,
+    );
+    this.population.cult = this.cult;
     this.accumulator = 0;
     this.tickTimer = 0;
     this.alpha = 0;
@@ -66,6 +73,12 @@ export class Simulation {
     this.population.setCount(count);
     this.epidemic.recount();
     this.zombies.recount();
+    this.cult.onPopulationChanged();
+  }
+
+  /** Réglage des sectes (déjà converti : 0..1, nombre ou booléen). */
+  setCultSetting(name, value) {
+    this.cultSettings[name] = value;
   }
 
   /** Curseur (valeur 0..1) ou mesure sanitaire (booléen). */
@@ -94,11 +107,13 @@ export class Simulation {
       this.clock.advance(fixedDt);
       this.population.step(fixedDt);
       this.zombies.step(fixedDt);
+      this.cult.step(fixedDt);
       this.tickTimer += fixedDt;
       if (this.tickTimer >= tickInterval) {
         this.tickTimer -= tickInterval;
         this.epidemic.tick(tickInterval);
         this.zombies.tick(tickInterval);
+        this.cult.tick(tickInterval);
         this.routine.tick();
       }
       this.accumulator -= fixedDt;

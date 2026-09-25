@@ -52,8 +52,7 @@ export class Epidemic {
     this.pending = [];
     this.pendingPlace = [];
 
-    const cfg = CONFIG.places.transmission;
-    this.placeFactor = city.buildings.map((b) => cfg[b.type] ?? 1);
+    this.refreshPlaceFactors();
 
     routine.onEnter = (c, b) => {
       if (b === city.hospitalIndex && c.health === Health.SYMPTOMATIC) {
@@ -143,6 +142,7 @@ export class Epidemic {
     for (const c of this.population.citizens) {
       if (!c.alive && c.home >= 0) this.routine.enter(c, c.home, true);
       c.health = Health.SUSCEPTIBLE;
+      c.killedBy = '';
       c.healthTimer = 0;
       c.latent = 0;
       c.asymptomatic = false;
@@ -261,8 +261,16 @@ export class Epidemic {
     }
   }
 
+  /** Risque de contagion propre à chaque bâtiment (à refaire si un bâtiment change de type). */
+  refreshPlaceFactors() {
+    const cfg = CONFIG.places.transmission;
+    this.placeFactor = this.city.buildings.map((b) => cfg[b.type] ?? 1);
+    this.placeVersion = this.city.version;
+  }
+
   /** Contagion entre personnes proches dans le même lieu. */
   transmit(hours) {
+    if (this.placeVersion !== this.city.version) this.refreshPlaceFactors();
     const beta = Math.min(this.settings.transmission, 0.999);
     if (beta <= 0) return;
     const cfg = CONFIG.epidemic;
@@ -422,6 +430,7 @@ export class Epidemic {
     for (const c of this.population.citizens) {
       if (c.zombie >= ZombieState.ZOMBIE) continue; // zombies et leurs victimes : comptés par Zombies
       if (!c.alive) {
+        if (c.killedBy) continue; // victimes des sectes : comptées par Cult
         counts.dead++;
         continue;
       }

@@ -73,6 +73,8 @@ export const CONFIG = {
       restaurant: 1.6,        // sans masque, face à face, longue durée
       nightclub: 3,           // foule dense, parole forte, mauvaise ventilation
       hospital: 0,            // protocoles sanitaires
+      temple: 1.4,            // réunions de secte : on chante, serrés, pendant des heures
+      ruin: 0,
     },
   },
 
@@ -269,6 +271,93 @@ export const CONFIG = {
     },
   },
 
+  /** Sectes : gourous, conversions, QG, gangs et incendies. Durées en heures de jeu. */
+  cult: {
+    // Curseurs : recrutement
+    charisma: { min: 0, max: 100, default: 55 },        // % : force de conviction des prêches
+    wordOfMouth: { min: 0, max: 100, default: 35 },     // % : les fidèles recrutent leurs proches
+    credulity: { min: 0, max: 100, default: 35 },       // % de la population réceptive
+    hold: { min: 0, max: 100, default: 60 },            // % : emprise (les fidèles restent)
+    tithe: { min: 0, max: 100, default: 50 },           // % : dîme versée par chaque fidèle
+    // Croissance
+    hqMembers: { min: 3, max: 80, default: 12 },        // fidèles pour acheter un QG
+    gangMembers: { min: 10, max: 200, default: 35 },    // fidèles pour basculer en gang
+    radicalization: { min: 0, max: 100, default: 35 },  // % des fidèles qui deviennent fanatiques
+    arson: { min: 0, max: 100, default: 55 },           // % : un raid finit en incendie
+    violence: { min: 0, max: 100, default: 35 },        // % : agressions des fanatiques
+    fireSpread: { min: 0, max: 100, default: 40 },      // % : propagation du feu aux voisins
+    // Riposte
+    policeThreshold: { min: 0, max: 100, default: 20 }, // % d'insécurité avant l'intervention
+    policeCount: { min: 1, max: 30, default: 6 },
+    firefighterCount: { min: 1, max: 20, default: 4 },
+    raidThreshold: { min: 1, max: 40, default: 6 },     // méfaits d'une secte avant la descente au QG
+    policeOn: true,
+    firefightersOn: true,
+    raidOn: true,
+    // Règles
+    fearBoost: true,          // épidémie et zombies font recette
+    prophecy: false,          // le gourou annonce la fin du monde
+    martyr: true,             // gourou arrêté ou tué : un successeur, et la colère
+    rivalry: true,            // les sectes rivales se font la guerre
+
+    maxCults: 4,
+    preachRadius: 70,         // px : portée d'un prêche
+    sermonRate: 1.6,          // conviction / h d'écoute (charisme 100 %, réceptivité 1)
+    listenBoost: 3,           // celui qui s'arrête pour écouter est bien plus touché
+    listenChance: 6,          // / h : un passant réceptif s'arrête pour écouter
+    listenDuration: [0.3, 1],
+    wordRate: 0.8,            // conviction / h de contact avec un fidèle (bouche-à-oreille 100 %)
+    contactRadius: 14,
+    meetingRate: 0.8,         // conviction / h en réunion (curieux) ; ferveur retrouvée (fidèles)
+    doubtRate: 0.02,          // perte de conviction / h sans contact (curieux)
+    devotionLoss: 0.035,      // perte de ferveur / h d'un fidèle (× (1 - emprise))
+    apostasyAt: 0.25,         // sous cette ferveur, le fidèle quitte la secte
+    curiousAt: 0.25,          // conviction à partir de laquelle on est invité aux réunions
+    preachHours: [9, 18.5],   // le gourou prêche au coin des rues
+    meetingHours: [19, 22.5], // réunions du soir
+    meetingChance: 0.7,       // chance qu'un fidèle aille à la réunion
+    curiousMeetingChance: 0.6,
+    proselytize: 0.35,        // chance (× bouche-à-oreille) qu'un fidèle prêche le week-end
+    discipleCharisma: 0.35,   // un disciple prêche moins bien que le gourou
+    titheRate: 300,           // €/jour par fidèle à 100 % de dîme
+    pricePerArea: 1.5,        // €/px² : prix d'un bâtiment
+    seizedFor: 48,            // h : après une descente, la secte sous surveillance ne peut rien acheter
+    maxAnnexes: 3,
+    // Nuits du gang
+    nightHours: [22, 4],
+    raidEvery: 1.3,           // chance / nuit de lancer un raid (× max(pyromanie, violence))
+    squad: [3, 7],
+    raidDuration: 3,
+    prowlChance: 1,           // (× violence) un fanatique rôde la nuit au lieu de dormir
+    preyRadius: 60,           // px : un fanatique qui rôde repère et suit un passant isolé
+    assaultRate: 5,           // agressions / h au contact (violence 100 %)
+    bail: 400,                // € : caution d'un fidèle (× 10 pour le gourou)
+    assaultLethality: 0.1,
+    brawlRate: 2,             // rixes / h entre fanatiques rivaux
+    // Feu
+    fireGrowth: 0.8,          // intensité / h (tant que personne n'arrose)
+    burnTime: [2, 6],         // h à pleine intensité avant ruine (selon la taille)
+    spreadRate: 1,            // / h, × propagation × intensité
+    spreadGap: 34,            // px : le feu saute les ruelles (ville dense), rarement la campagne
+    fireDeath: 0.05,          // chance qu'un occupant périsse au départ du feu
+    extinguishRate: 0.3,      // intensité / h éteinte par équipe de pompiers sur place
+    // Police
+    unitSpeed: 85,
+    arrestRate: 1.5,          // arrestations / s au contact
+    resistRate: 0.12,         // policiers blessés / s au contact (× violence)
+    jailTime: [24, 48],
+    guruJail: 120,
+    rageDecay: 0.02,          // / h : la colère après un martyre retombe
+    insecurityMemory: 24,     // h : demi-vie des méfaits dans l'insécurité
+    insecurityScale: 12,      // méfaits "récents" pour ~63 % d'insécurité
+    insecurityLeisure: 0.6,   // l'insécurité freine les sorties
+    prophecyDelay: 3,         // jours avant la date annoncée
+    sampleInterval: 1,
+    maxSamples: 300,
+    maxEvents: 50,
+    maxTags: 160,
+  },
+
   navigation: {
     cellSize: 8,              // grille des champs de flux
     clearance: 4,             // rayon libre exigé pour qu'une case soit praticable
@@ -306,6 +395,15 @@ export const CONFIG = {
     hospitalRing: '#ffffff',  // en route vers l'hôpital
     homeRing: '#f1c40f',      // rentre s'isoler / se confiner
     hospitalCross: '#ecf0f1',
+    // Sectes (une couleur par secte), feu, secours
+    cults: ['#d35cff', '#2ee6d6', '#ff5c8a', '#ffe08a'],
+    guruGlow: 'rgba(255, 224, 138, ALPHA)',
+    fire: '#ff7a1a',
+    fireCore: '#ffd23f',
+    smoke: 'rgba(90, 90, 90, ALPHA)',
+    firefighter: '#e8322b',
+    firefighterStroke: '#ffd9d6',
+    spray: 'rgba(140, 200, 255, 0.7)',
     // Bâtiments par type : remplissage, bordure (et étiquettes)
     places: {
       home: { fill: '#2c3e50', stroke: '#34495e' },
@@ -314,6 +412,8 @@ export const CONFIG = {
       restaurant: { fill: '#3d2820', stroke: '#c0673a' },
       nightclub: { fill: '#2f1f3d', stroke: '#9b59d6' },
       hospital: { fill: '#4a2330', stroke: '#c0392b' },
+      temple: { fill: '#2a1a33', stroke: '#7a4a8f' },
+      ruin: { fill: '#161312', stroke: '#3b2a22' },
       street: { fill: '#1a1a1a', stroke: '#6b7580' },
     },
   },

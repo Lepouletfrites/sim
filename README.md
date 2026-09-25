@@ -1,20 +1,21 @@
 # CitySim — Simulation urbaine 2D procédurale
 
-Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D), sans framework ni dépendance ni étape de build : une ville procédurale, ses habitants et leur vie quotidienne, une épidémie et une apocalypse zombie.
+Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D), sans framework ni dépendance ni étape de build : une ville procédurale, ses habitants et leur vie quotidienne, une épidémie, une apocalypse zombie et des sectes.
 
 ## Interface
 
-- **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès, zombies).
-- **Carte** avec une légende repliable en trois colonnes (virus, zombies, bâtiments). L'action du clic se choisit dans l'onglet Zombies.
-- **Panneau latéral** : trois onglets, chacun découpé en sous-onglets courts (onglet et sous-onglets mémorisés) :
+- **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès, zombies, fidèles).
+- **Carte** avec une légende repliable en quatre colonnes (virus, zombies, sectes, bâtiments). L'action du clic se choisit dans l'onglet Zombies ou Sectes.
+- **Panneau latéral** : quatre onglets, chacun découpé en sous-onglets courts (onglet et sous-onglets mémorisés) :
 
 | Onglet | Sous-onglets |
 |---|---|
 | **Virus** | **Suivi** : indicateurs, actions, courbe, état de santé, soins, lieux de contamination · **Réglages** : virus, comportements, mesures sanitaires |
 | **Zombies** | **Suivi** : état de l'apocalypse, actions et clic, courbe, survivants, remède, journal · **Riposte** : police, barricades de rue, armée · **Réglages** : morsure, zombies, humains, barricades et vivres, remède, règles farfelues |
+| **Sectes** | **Suivi** : état, actions et clic, fiche de chaque secte, courbe des fidèles, bilan, journal · **Riposte** : police, descente au QG, pompiers · **Réglages** : recrutement, emprise, croissance, chaos, règles farfelues |
 | **Ville** | Génération (population, densité, désordre, espaces verts, rivière, graine), lieux et horaires |
 
-- Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter).
+- Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter, `G` gourou).
 
 ## Fonctionnalités
 
@@ -115,6 +116,42 @@ Avec les réglages par défaut (600 habitants, un patient zéro), trois villes d
 | 2 | La police contient l'invasion dès le premier jour | 474 |
 | 3 | Guerre d'usure avec des pillages ; le remède arrive au jour 4 | 368 |
 
+### Sectes
+
+Un troisième phénomène, sur la même population. Jusqu'à **4 sectes rivales**, chacune avec son nom, sa couleur et son gourou (« Les Enfants du Grand Pigeon », « Le Temple du Wifi Céleste »…).
+
+Passant → **prêche** ou **bouche-à-oreille** → Curieux → **réunions** → Fidèle → (gang) **Fanatique**. Sans réunions, la ferveur s'use et le fidèle finit par partir, échaudé.
+
+| Étape | Déclencheur par défaut | Ce qui se passe |
+|---|---|---|
+| **Prédication** | un gourou apparaît (bouton, touche `G` ou clic « Gourou ») | Le gourou démissionne et prêche devant les lieux fréquentés (centre commercial, restaurants, bureaux). Les passants **crédules** s'arrêtent pour l'écouter et forment un attroupement. Réunions du soir dans son salon. |
+| **Communauté** | 12 fidèles, et assez d'argent | La secte **achète un immeuble** grâce à la dîme : c'est son **QG** (tracé à ses couleurs, avec son symbole). Le gourou y emménage, les réunions s'y tiennent. Locataires et salariés partent ailleurs. Une **annexe** de plus à chaque palier (jusqu'à 3). Le week-end, les disciples prêchent à leur tour. |
+| **Gang** | 35 fidèles | Les moins civiques deviennent **fanatiques** et s'installent au QG. La nuit, ils rôdent, suivent et **agressent** les passants isolés, et lancent des **raids** : un commando se rassemble devant une cible (centre commercial, restaurant, bureaux, QG rival) et y met le feu, ou brise les vitrines et **tague** la façade. |
+
+- **Incendies** : le feu grandit tant que personne ne l'arrose, se **propage** aux bâtiments voisins (ruelles : redoutable en ville dense, rare à la campagne), fait sortir les occupants (certains y restent) et laisse des **ruines** où plus personne ne va. Les habitants d'un bâtiment détruit sont relogés. Clic « Incendie » pour mettre le feu soi-même.
+- **Pompiers** : partent de la **caserne** (marquée POMPIERS sur la carte), se répartissent entre les foyers et les arrosent sur place.
+- **Police** : patrouille dès que l'**insécurité** (agressions et incendies récents) dépasse son seuil, surveille le QG le plus remuant et interpelle les fanatiques dehors la nuit. Garde à vue de 1 à 2 jours au commissariat, où l'on voit les détenus. Une secte riche **paie la caution** de ses membres.
+- **Descente au QG** : quand une secte cumule trop de méfaits, la police perquisitionne. Tous les membres présents sont embarqués (le gourou pour 5 jours), les locaux saisis, 80 % de la caisse confisquée et les comptes gelés 48 h.
+- **Insécurité** : elle pousse les habitants à rester chez eux, et retombe en un jour ou deux.
+- **Interactions** : une réunion de secte est un lieu de contagion (×1,4) ; un fidèle mordu quitte la secte ; avec « La peur fait recette », l'épidémie et les zombies rendent la population bien plus crédule.
+
+| Règle farfelue | Effet |
+|---|---|
+| **La peur fait recette** | Épidémie, alerte zombie et insécurité multiplient les conversions |
+| **Prophétie de fin du monde** | Le gourou annonce la fin du monde pour dans 3 jours. Si une catastrophe tombe ce jour-là (zombies, épidémie, ville en feu), la secte explose ; sinon, désillusion, départs… et nouvelle date |
+| **Martyrs** | Gourou arrêté ou tué : un fanatique prend sa place et la colère rend le gang plus violent pendant un temps |
+| **Guerre des sectes** | Les fanatiques rivaux se battent dans la rue et incendient les QG adverses |
+
+Réglages : charisme, bouche-à-oreille, crédulité, emprise, dîme, fidèles pour le QG et pour le gang, radicalisation, pyromanie, violence, propagation du feu ; seuil et effectif de la police, méfaits avant la descente, nombre d'équipes de pompiers.
+
+Trois incendies allumés dans la même ville (trois villes par ligne, 16 h de jeu) :
+
+| Densité | Pompiers | Bâtiments touchés | En ruine |
+|---|---|---|---|
+| 5 | oui | 11 | 4 |
+| 9 (centre-ville) | oui | 37 | 21 |
+| 9 (centre-ville) | non | 59 | 59 |
+
 ### Pourquoi ce modèle de transmission
 
 | Choix | Raison |
@@ -150,6 +187,12 @@ Sans mesures, on se contamine surtout au **travail** (40 à 55 %), puis au resta
 | Croix violette | Décès (s'efface en 12 h de jeu) |
 | Anneau blanc | En route vers l'hôpital |
 | Anneau jaune | Rentre s'isoler ou se confiner |
+| Disque cerclé de blanc avec un halo | Gourou (cercle pointillé : portée de son prêche) |
+| Anneau de couleur (pâle : curieux) | Fidèle de la secte de cette couleur |
+| Losange de couleur | Fanatique |
+| Bâtiment liseré de couleur, « QG » / « ANNEXE » | Locaux d'une secte |
+| Flammes et fumée | Incendie ; bâtiment noirci : ruine |
+| Carré rouge | Pompiers (pointillés bleus : jet d'eau) |
 | Couleur du bâtiment | Type de lieu (voir le panneau Lieux) |
 
 Infection d'un habitant au clic sur la carte, bouton ou touche `I` ; courbe de l'épidémie au fil des jours, avec info-bulle.
@@ -185,6 +228,10 @@ js/
 │   ├── ZombieState.js      États (humain, mordu, zombie...)
 │   ├── Zombies.js          Apocalypse : chasse, combats, sièges, foyers, remède, journal
 │   └── Response.js         Riposte : police, barricades de rue, armée
+├── cult/
+│   ├── Cult.js             Sectes : prêches, conversions, QG, gangs, raids, prophétie, journal
+│   ├── Fires.js            Incendies : propagation, extinction, ruines
+│   └── CultResponse.js     Police (interpellations, descente au QG) et pompiers
 ├── physics/
 │   └── Collision.js        Collision cercle/rectangle avec glissement
 ├── render/
@@ -192,6 +239,7 @@ js/
 └── ui/
     ├── UI.js               Barre d'outils, onglets, légende et raccourcis clavier
     ├── ZombiePanel.js      Onglet Zombies
+    ├── CultPanel.js        Onglet Sectes
     └── EpidemicChart.js    Courbe de l'épidémie (aire empilée)
 ```
 
