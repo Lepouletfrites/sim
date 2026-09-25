@@ -23,8 +23,13 @@ export class City {
     this.buildings = layout.buildings;
     this.plazas = layout.plazas;
     this.blocks = layout.blocks;
+    this.water = layout.water ?? [];
+    this.bridges = layout.bridges ?? [];
+    this.river = layout.river ?? null;
     this.avenuesX = layout.avenuesX;
     this.avenuesY = layout.avenuesY;
+    // Obstacles physiques : bâtiments puis eau (l'eau bloque mais n'est pas un lieu).
+    this.solids = [...this.buildings, ...this.water];
 
     this.buildBuildingGrid();
     this.buildWalkGrid();
@@ -187,7 +192,7 @@ export class City {
     this.bRows = Math.max(1, Math.ceil(this.height / cs));
     this.bCells = Array.from({ length: this.bCols * this.bRows }, () => []);
 
-    this.buildings.forEach((b, index) => {
+    this.solids.forEach((b, index) => {
       const x0 = Math.max(0, Math.floor(b.x / cs));
       const y0 = Math.max(0, Math.floor(b.y / cs));
       const x1 = Math.min(this.bCols - 1, Math.floor((b.x + b.w) / cs));
@@ -197,14 +202,14 @@ export class City {
       }
     });
 
-    // Tampon anti-doublons (un bâtiment peut couvrir plusieurs cases).
-    this.stamp = new Uint32Array(this.buildings.length);
+    // Tampon anti-doublons (un obstacle peut couvrir plusieurs cases).
+    this.stamp = new Uint32Array(this.solids.length);
     this.queryId = 0;
   }
 
   /**
-   * Remplit `out` avec les bâtiments susceptibles de toucher le cercle (x, y, r).
-   * @returns {number} nombre de bâtiments écrits
+   * Remplit `out` avec les obstacles (bâtiments et eau) susceptibles de toucher le cercle (x, y, r).
+   * @returns {number} nombre d'obstacles écrits
    */
   getBuildingsNear(x, y, r, out) {
     const cs = this.bCell;
@@ -222,7 +227,7 @@ export class City {
           const index = cell[k];
           if (this.stamp[index] === id) continue;
           this.stamp[index] = id;
-          out[count++] = this.buildings[index];
+          out[count++] = this.solids[index];
         }
       }
     }
@@ -253,7 +258,7 @@ export class City {
     this.wRows = Math.ceil(this.height / cs);
     this.walk = new Uint8Array(this.wCols * this.wRows).fill(1);
 
-    for (const b of this.buildings) {
+    for (const b of this.solids) {
       const left = b.x - c;
       const right = b.x + b.w + c;
       const top = b.y - c;

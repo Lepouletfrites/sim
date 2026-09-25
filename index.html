@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Simulation urbaine 2D procédurale : routines quotidiennes, lieux publics et propagation d'une épidémie, en Vanilla JavaScript.">
+  <meta name="description" content="Simulation urbaine 2D procédurale : routines quotidiennes, épidémie et apocalypse zombie, en Vanilla JavaScript.">
   <title>CitySim</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -45,21 +45,26 @@
           <summary>Légende</summary>
           <div class="legend-box__body">
             <div>
-              <h4>Habitants</h4>
+              <h4>Virus</h4>
               <ul>
                 <li><i class="dot" data-health="0"></i>Sain</li>
-                <li><i class="dot" data-health="1"></i>Porteur sans symptômes</li>
+                <li><i class="dot" data-health="1"></i>Porteur</li>
                 <li><i class="dot" data-health="2"></i>Malade</li>
-                <li><i class="dot" data-health="3"></i>Guéri, immunisé</li>
+                <li><i class="dot" data-health="3"></i>Guéri</li>
                 <li><i class="dot dot--cross" data-health="4"></i>Décès</li>
                 <li><i class="dot dot--ring dot--ring-hospital"></i>Va à l'hôpital</li>
                 <li><i class="dot dot--ring dot--ring-home"></i>Rentre s'isoler</li>
+              </ul>
+            </div>
+            <div>
+              <h4>Zombies</h4>
+              <ul>
                 <li><i class="dot dot--zombie"></i>Zombie</li>
                 <li><i class="dot dot--ring dot--ring-bitten"></i>Mordu</li>
                 <li><i class="dot dot--ring dot--ring-fighter"></i>Survivaliste</li>
                 <li><i class="unit unit--police"></i>Police</li>
                 <li><i class="unit unit--army"></i>Armée</li>
-                <li><i class="unit unit--wall"></i>Barricade de rue</li>
+                <li><i class="unit unit--wall"></i>Barricade</li>
               </ul>
             </div>
             <div>
@@ -67,7 +72,7 @@
               <ul>
                 <li><i class="swatch" data-place="home"></i>Logement</li>
                 <li><i class="swatch" data-place="work"></i>Bureaux</li>
-                <li><i class="swatch" data-place="mall"></i>Centre commercial</li>
+                <li><i class="swatch" data-place="mall"></i>Centre co.</li>
                 <li><i class="swatch" data-place="restaurant"></i>Restaurant</li>
                 <li><i class="swatch" data-place="nightclub"></i>Boîte de nuit</li>
                 <li><i class="swatch" data-place="hospital"></i>Hôpital</li>
@@ -84,147 +89,356 @@
     <aside class="sidebar">
       <header class="sidebar__header">
         <h1>CitySim</h1>
-        <p>Ville, routines et épidémie</p>
+        <p>Ville, virus et zombies</p>
       </header>
 
       <nav class="tabs" role="tablist" aria-label="Sections du panneau">
-        <button type="button" class="tabs__btn" role="tab" id="tab-btn-situation" aria-controls="tab-situation" data-tab="situation">Situation</button>
-        <button type="button" class="tabs__btn" role="tab" id="tab-btn-settings" aria-controls="tab-settings" data-tab="settings">Réglages</button>
-        <button type="button" class="tabs__btn" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
+        <button type="button" class="tabs__btn" role="tab" id="tab-btn-virus" aria-controls="tab-virus" data-tab="virus">Virus</button>
         <button type="button" class="tabs__btn tabs__btn--zombie" role="tab" id="tab-btn-zombies" aria-controls="tab-zombies" data-tab="zombies">Zombies</button>
+        <button type="button" class="tabs__btn" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
       </nav>
 
       <div class="tabpanels">
-        <!-- ------------------------------ Situation ------------------------------ -->
-        <section class="tabpanel" id="tab-situation" role="tabpanel" aria-labelledby="tab-btn-situation">
-          <div class="tiles">
-            <div class="tile">
-              <span class="tile__label">Infectés actifs</span>
-              <span class="tile__value" id="stat-active">0</span>
-            </div>
-            <div class="tile">
-              <span class="tile__label">Cas graves</span>
-              <span class="tile__value" id="stat-severe">0</span>
-            </div>
-            <div class="tile">
-              <span class="tile__label">Décès</span>
-              <span class="tile__value" id="stat-dead">0</span>
-            </div>
-            <div class="tile">
-              <span class="tile__label">Létalité observée</span>
-              <span class="tile__value" id="stat-lethality">0 %</span>
-            </div>
+        <!-- =============================== VIRUS =============================== -->
+        <section class="tabpanel" id="tab-virus" role="tabpanel" aria-labelledby="tab-btn-virus">
+          <div class="subtabs" role="tablist" aria-label="Virus">
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-virus-follow" aria-controls="sub-virus-follow" data-subtab="virus-follow">Suivi</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-virus-settings" aria-controls="sub-virus-settings" data-subtab="virus-settings">Réglages</button>
           </div>
 
-          <div class="card">
-            <div class="card__head">
-              <h3>Évolution</h3>
-              <ul class="chips" id="chart-legend"></ul>
+          <!-- Virus · Suivi -->
+          <div class="subpanel" id="sub-virus-follow" role="tabpanel" aria-labelledby="sub-btn-virus-follow">
+            <div class="tiles">
+              <div class="tile"><span class="tile__label">Infectés actifs</span><span class="tile__value" id="stat-active">0</span></div>
+              <div class="tile"><span class="tile__label">Cas graves</span><span class="tile__value" id="stat-severe">0</span></div>
+              <div class="tile"><span class="tile__label">Décès</span><span class="tile__value" id="stat-dead">0</span></div>
+              <div class="tile"><span class="tile__label">Létalité observée</span><span class="tile__value" id="stat-lethality">0 %</span></div>
             </div>
-            <div class="chart">
-              <canvas id="epidemic-chart" aria-label="Évolution de l'épidémie : décès, infectés, guéris et sains au fil des jours"></canvas>
-              <div class="chart__tooltip" id="chart-tooltip" hidden></div>
+
+            <div class="actions">
+              <button type="button" class="btn btn--primary" id="btn-infect">Infecter un habitant</button>
+              <button type="button" class="btn" id="btn-reset-epidemic">Réinitialiser</button>
             </div>
-          </div>
 
-          <div class="card">
-            <h3>État de santé</h3>
-            <div class="stackbar" id="health-bar" aria-hidden="true"></div>
-            <ul class="rows">
-              <li><i class="dot" data-health="0"></i>Sains<b id="stat-susceptible">0</b></li>
-              <li><i class="dot" data-health="1"></i>Porteurs sans symptômes<b id="stat-carriers">0</b></li>
-              <li><i class="dot" data-health="2"></i>Malades qui continuent leur vie<b id="stat-sickOut">0</b></li>
-              <li><i class="dot" data-health="3"></i>Guéris<b id="stat-recovered">0</b></li>
-              <li><i class="dot dot--cross" data-health="4"></i>Décès<b id="stat-dead-row">0</b></li>
-            </ul>
-          </div>
-
-          <div class="card">
-            <h3>Soins</h3>
-            <div class="meter">
-              <div class="meter__row">
-                <span>Lits d'hôpital occupés</span>
-                <b id="stat-hospitalized">0 / 40</b>
+            <div class="card">
+              <div class="card__head">
+                <h3>Évolution</h3>
+                <ul class="chips" id="chart-legend"></ul>
               </div>
-              <div class="meter__track"><div class="meter__fill meter__fill--hospital" id="meter-hospital"></div></div>
+              <div class="chart">
+                <canvas id="epidemic-chart" aria-label="Évolution de l'épidémie : décès, infectés, guéris et sains au fil des jours"></canvas>
+                <div class="chart__tooltip" id="chart-tooltip" hidden></div>
+              </div>
             </div>
-            <ul class="rows">
-              <li><i class="dot dot--ring dot--ring-hospital" data-health="2"></i>En route vers l'hôpital<b id="stat-toHospital">0</b></li>
-              <li><i class="dot dot--ring dot--ring-home" data-health="2"></i>En quarantaine chez eux<b id="stat-quarantined">0</b></li>
-              <li><i class="swatch" data-place="home"></i>Cas graves alités sans soins<b id="stat-bedridden">0</b></li>
-              <li class="rows__sub">dont faute de lit à l'hôpital<b id="stat-waitingBed">0</b></li>
-            </ul>
+
+            <div class="card">
+              <h3>État de santé</h3>
+              <div class="stackbar" id="health-bar" aria-hidden="true"></div>
+              <ul class="rows">
+                <li><i class="dot" data-health="0"></i>Sains<b id="stat-susceptible">0</b></li>
+                <li><i class="dot" data-health="1"></i>Porteurs sans symptômes<b id="stat-carriers">0</b></li>
+                <li><i class="dot" data-health="2"></i>Malades qui continuent leur vie<b id="stat-sickOut">0</b></li>
+                <li><i class="dot" data-health="3"></i>Guéris<b id="stat-recovered">0</b></li>
+                <li><i class="dot dot--cross" data-health="4"></i>Décès<b id="stat-dead-row">0</b></li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Soins</h3>
+              <div class="meter">
+                <div class="meter__row"><span>Lits d'hôpital occupés</span><b id="stat-hospitalized">0 / 40</b></div>
+                <div class="meter__track"><div class="meter__fill meter__fill--hospital" id="meter-hospital"></div></div>
+              </div>
+              <ul class="rows">
+                <li><i class="dot dot--ring dot--ring-hospital" data-health="2"></i>En route vers l'hôpital<b id="stat-toHospital">0</b></li>
+                <li><i class="dot dot--ring dot--ring-home" data-health="2"></i>En quarantaine chez eux<b id="stat-quarantined">0</b></li>
+                <li><i class="swatch" data-place="home"></i>Cas graves alités sans soins<b id="stat-bedridden">0</b></li>
+                <li class="rows__sub">dont faute de lit à l'hôpital<b id="stat-waitingBed">0</b></li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Où se contamine-t-on ?</h3>
+              <ul class="bars" id="contagion-bars"></ul>
+              <p class="note">Jamais chez soi : seulement au travail, dans les lieux publics et, un peu, dans la rue.</p>
+            </div>
           </div>
 
-          <div class="actions">
-            <button type="button" class="btn btn--primary" id="btn-infect">Infecter un habitant</button>
-            <button type="button" class="btn" id="btn-reset-epidemic">Réinitialiser</button>
+          <!-- Virus · Réglages -->
+          <div class="subpanel" id="sub-virus-settings" role="tabpanel" aria-labelledby="sub-btn-virus-settings" hidden>
+            <div class="card">
+              <h3>Virus</h3>
+              <label class="control" for="slider-transmission">
+                <span class="control__row"><span>Transmission</span><output id="value-transmission">12 %</output></span>
+                <input type="range" id="slider-transmission">
+                <span class="control__help">Chance de contaminer par heure de contact rapproché, selon le lieu.</span>
+              </label>
+              <label class="control" for="slider-virulence">
+                <span class="control__row"><span>Virulence</span><output id="value-virulence">10 %</output></span>
+                <input type="range" id="slider-virulence">
+                <span class="control__help">Part de formes graves et leur létalité (sans soins : ~23 % à 10 %, ~95 % à 100 %). L'hôpital divise le risque par 5.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Comportements</h3>
+              <label class="control" for="slider-responsibility">
+                <span class="control__row"><span>Responsabilité</span><output id="value-responsibility">50 %</output></span>
+                <input type="range" id="slider-responsibility">
+                <span class="control__help">Part des malades qui s'isolent (forme légère) ou vont à l'hôpital (forme grave). Les autres vont travailler malades.</span>
+              </label>
+              <label class="control" for="slider-prudence">
+                <span class="control__row"><span>Prudence</span><output id="value-prudence">50 %</output></span>
+                <input type="range" id="slider-prudence">
+                <span class="control__help">Quand l'inquiétude monte : masques, distance, moins de sorties, confinement volontaire.</span>
+              </label>
+              <div class="meter">
+                <div class="meter__row"><span>Inquiétude collective</span><b id="value-awareness">0 %</b></div>
+                <div class="meter__track"><div class="meter__fill meter__fill--awareness" id="meter-awareness"></div></div>
+              </div>
+              <ul class="rows">
+                <li>Portent un masque<b id="stat-masked">0</b></li>
+                <li>Confinés volontaires<b id="stat-confined">0</b></li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Mesures sanitaires</h3>
+              <label class="switch"><input type="checkbox" id="policy-closeNightclubs"><span class="switch__track"></span>Fermer les boîtes de nuit</label>
+              <label class="switch"><input type="checkbox" id="policy-closeCommerce"><span class="switch__track"></span>Fermer commerces et restaurants</label>
+              <label class="switch"><input type="checkbox" id="policy-telework"><span class="switch__track"></span>Télétravail obligatoire</label>
+            </div>
           </div>
         </section>
 
-        <!-- ------------------------------ Réglages ------------------------------ -->
-        <section class="tabpanel" id="tab-settings" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
-          <div class="card">
-            <h3>Virus</h3>
-            <label class="control" for="slider-transmission">
-              <span class="control__row"><span>Transmission</span><output id="value-transmission">12 %</output></span>
-              <input type="range" id="slider-transmission">
-              <span class="control__help">Chance de contaminer par heure de contact rapproché, selon le lieu.</span>
-            </label>
-            <label class="control" for="slider-virulence">
-              <span class="control__row"><span>Virulence</span><output id="value-virulence">10 %</output></span>
-              <input type="range" id="slider-virulence">
-              <span class="control__help">Part de formes graves et leur létalité (sans soins : ~23 % à 10 %, ~95 % à 100 %). L'hôpital divise le risque par 5.</span>
-            </label>
+        <!-- ============================== ZOMBIES ============================== -->
+        <section class="tabpanel" id="tab-zombies" role="tabpanel" aria-labelledby="tab-btn-zombies" hidden>
+          <div class="subtabs" role="tablist" aria-label="Zombies">
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-zombies-follow" aria-controls="sub-zombies-follow" data-subtab="zombies-follow">Suivi</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-zombies-response" aria-controls="sub-zombies-response" data-subtab="zombies-response">Riposte</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-zombies-settings" aria-controls="sub-zombies-settings" data-subtab="zombies-settings">Réglages</button>
           </div>
 
-          <div class="card">
-            <h3>Comportements</h3>
-            <label class="control" for="slider-responsibility">
-              <span class="control__row"><span>Responsabilité</span><output id="value-responsibility">50 %</output></span>
-              <input type="range" id="slider-responsibility">
-              <span class="control__help">Part des malades qui s'isolent (forme légère) ou vont à l'hôpital (forme grave). Les autres vont travailler malades.</span>
-            </label>
-            <label class="control" for="slider-prudence">
-              <span class="control__row"><span>Prudence</span><output id="value-prudence">50 %</output></span>
-              <input type="range" id="slider-prudence">
-              <span class="control__help">Quand l'inquiétude monte : masques, distance, moins de sorties, confinement volontaire.</span>
-            </label>
-
-            <div class="meter">
-              <div class="meter__row">
-                <span>Inquiétude collective</span>
-                <b id="value-awareness">0 %</b>
-              </div>
-              <div class="meter__track"><div class="meter__fill meter__fill--awareness" id="meter-awareness"></div></div>
+          <!-- Zombies · Suivi -->
+          <div class="subpanel" id="sub-zombies-follow" role="tabpanel" aria-labelledby="sub-btn-zombies-follow">
+            <div class="status" id="zombie-status" data-level="calm">
+              <strong id="zombie-status-title">Ville épargnée</strong>
+              <span id="zombie-status-text">Aucun zombie. Lâchez-en un pour commencer.</span>
             </div>
-            <ul class="rows">
-              <li>Portent un masque<b id="stat-masked">0</b></li>
-              <li>Confinés volontaires<b id="stat-confined">0</b></li>
-            </ul>
+
+            <div class="tiles">
+              <div class="tile"><span class="tile__label">Humains</span><span class="tile__value" id="zstat-humans">0</span></div>
+              <div class="tile"><span class="tile__label">Zombies</span><span class="tile__value" id="zstat-zombies">0</span></div>
+              <div class="tile"><span class="tile__label">Mordus (en sursis)</span><span class="tile__value" id="zstat-bitten">0</span></div>
+              <div class="tile"><span class="tile__label">Pertes humaines</span><span class="tile__value" id="zstat-lost">0</span></div>
+            </div>
+
+            <div class="card">
+              <h3>Déclencher</h3>
+              <div class="actions">
+                <button type="button" class="btn btn--zombie" id="btn-zombie">Lâcher un zombie</button>
+                <button type="button" class="btn" id="btn-horde">Lâcher une horde</button>
+              </div>
+              <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
+              <div class="segmented" role="radiogroup" aria-label="Action du clic sur la carte">
+                <button type="button" role="radio" data-click="infect">Virus</button>
+                <button type="button" role="radio" data-click="zombie">Zombie</button>
+                <button type="button" role="radio" data-click="strike">Frappe aérienne</button>
+              </div>
+              <p class="note">La frappe aérienne neutralise tout ce qui est dans la rue dans un rayon de 45 px, humains et forces de l'ordre compris. Les bâtiments protègent.</p>
+            </div>
+
+            <div class="card">
+              <div class="card__head">
+                <h3>Humains contre zombies</h3>
+                <ul class="chips" id="zombie-chart-legend"></ul>
+              </div>
+              <div class="chart">
+                <canvas id="zombie-chart" aria-label="Évolution : humains, mordus, zombies et pertes au fil des jours"></canvas>
+                <div class="chart__tooltip" id="zombie-chart-tooltip" hidden></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Survivants</h3>
+              <ul class="rows">
+                <li>Barricadés chez eux<b id="zstat-barricaded">0</b></li>
+                <li>Partis piller des vivres<b id="zstat-looting">0</b></li>
+                <li><i class="dot dot--ring dot--ring-fighter"></i>Survivalistes<b id="zstat-fighters">0</b></li>
+                <li><i class="dot dot--zombie"></i>Zombies entrés dans des bâtiments<b id="zstat-invaded">0</b></li>
+                <li>Zombies neutralisés<b id="zstat-destroyed">0</b></li>
+                <li>Dévorés<b id="zstat-devoured">0</b></li>
+                <li>Civils tués par les frappes<b id="zstat-killed">0</b></li>
+                <li>Guéris par le remède<b id="zstat-cured">0</b></li>
+              </ul>
+              <div class="meter meter--spaced">
+                <div class="meter__row"><span>Remède (recherche à l'hôpital)</span><b id="zstat-cure">0 %</b></div>
+                <div class="meter__track"><div class="meter__fill meter__fill--cure" id="meter-cure"></div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Journal de l'apocalypse</h3>
+              <ol class="log" id="zombie-log">
+                <li class="log__empty">Rien à signaler… pour l'instant.</li>
+              </ol>
+            </div>
           </div>
 
-          <div class="card">
-            <h3>Mesures sanitaires</h3>
-            <label class="switch"><input type="checkbox" id="policy-closeNightclubs"><span class="switch__track"></span>Fermer les boîtes de nuit</label>
-            <label class="switch"><input type="checkbox" id="policy-closeCommerce"><span class="switch__track"></span>Fermer commerces et restaurants</label>
-            <label class="switch"><input type="checkbox" id="policy-telework"><span class="switch__track"></span>Télétravail obligatoire</label>
+          <!-- Zombies · Riposte -->
+          <div class="subpanel" id="sub-zombies-response" role="tabpanel" aria-labelledby="sub-btn-zombies-response" hidden>
+            <div class="card">
+              <p class="note note--top">Population transformée : <b id="zstat-share">0 %</b>. Chaque force entre en jeu quand la jauge atteint son seuil (repère blanc). Police et armée ont des munitions limitées.</p>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ztoggle-policeOn"><span class="switch__track"></span><i class="unit unit--police"></i>Police</label>
+                  <span class="badge" id="resp-police-state">en attente</span>
+                </div>
+                <div class="gauge"><div class="gauge__fill" id="resp-police-fill"></div><div class="gauge__mark" id="resp-police-mark"></div></div>
+                <p class="response__stats" id="resp-police-stats">Intervient dès les premiers cas, depuis le commissariat.</p>
+                <div class="response__sliders">
+                  <label class="control" for="zslider-policeThreshold">
+                    <span class="control__row"><span>Seuil</span><output id="zvalue-policeThreshold">2 %</output></span>
+                    <input type="range" id="zslider-policeThreshold">
+                  </label>
+                  <label class="control" for="zslider-policeCount">
+                    <span class="control__row"><span>Agents</span><output id="zvalue-policeCount">6</output></span>
+                    <input type="range" id="zslider-policeCount">
+                  </label>
+                </div>
+              </div>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ztoggle-wallsOn"><span class="switch__track"></span><i class="unit unit--wall"></i>Barricades de rue</label>
+                  <span class="badge" id="resp-walls-state">en attente</span>
+                </div>
+                <div class="gauge"><div class="gauge__fill" id="resp-walls-fill"></div><div class="gauge__mark" id="resp-walls-mark"></div></div>
+                <p class="response__stats" id="resp-walls-stats">Les habitants barrent les rues au contact du front. Seuls les zombies sont bloqués.</p>
+                <div class="response__sliders">
+                  <label class="control" for="zslider-wallThreshold">
+                    <span class="control__row"><span>Seuil</span><output id="zvalue-wallThreshold">10 %</output></span>
+                    <input type="range" id="zslider-wallThreshold">
+                  </label>
+                  <label class="control" for="zslider-wallCount">
+                    <span class="control__row"><span>Barricades</span><output id="zvalue-wallCount">12</output></span>
+                    <input type="range" id="zslider-wallCount">
+                  </label>
+                </div>
+              </div>
+
+              <div class="response">
+                <div class="response__head">
+                  <label class="switch switch--inline"><input type="checkbox" id="ztoggle-armyOn"><span class="switch__track"></span><i class="unit unit--army"></i>Armée</label>
+                  <span class="badge" id="resp-army-state">en attente</span>
+                </div>
+                <div class="gauge"><div class="gauge__fill" id="resp-army-fill"></div><div class="gauge__mark" id="resp-army-mark"></div></div>
+                <p class="response__stats" id="resp-army-stats">Entre par le bord de la carte le plus proche de l'invasion. Mieux protégée, tire plus loin.</p>
+                <div class="response__sliders">
+                  <label class="control" for="zslider-armyThreshold">
+                    <span class="control__row"><span>Seuil</span><output id="zvalue-armyThreshold">30 %</output></span>
+                    <input type="range" id="zslider-armyThreshold">
+                  </label>
+                  <label class="control" for="zslider-armyCount">
+                    <span class="control__row"><span>Soldats</span><output id="zvalue-armyCount">24</output></span>
+                    <input type="range" id="zslider-armyCount">
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zombies · Réglages -->
+          <div class="subpanel" id="sub-zombies-settings" role="tabpanel" aria-labelledby="sub-btn-zombies-settings" hidden>
+            <div class="card">
+              <h3>Morsure</h3>
+              <label class="control" for="zslider-biteInfect">
+                <span class="control__row"><span>Contagiosité</span><output id="zvalue-biteInfect">70 %</output></span>
+                <input type="range" id="zslider-biteInfect">
+                <span class="control__help">Chance qu'une morsure transforme la victime. Sinon, elle est dévorée.</span>
+              </label>
+              <label class="control" for="zslider-turnDelay">
+                <span class="control__row"><span>Délai de transformation</span><output id="zvalue-turnDelay">6 h</output></span>
+                <input type="range" id="zslider-turnDelay">
+                <span class="control__help">Un mordu garde sa vie normale pendant ce temps… et se transforme là où il se trouve, parfois au milieu des siens.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Zombies</h3>
+              <label class="control" for="zslider-speed">
+                <span class="control__row"><span>Vitesse</span><output id="zvalue-speed">60 %</output></span>
+                <input type="range" id="zslider-speed">
+                <span class="control__scale"><span>Lents, à l'ancienne</span><span>Sprinteurs</span></span>
+              </label>
+              <label class="control" for="zslider-smell">
+                <span class="control__row"><span>Flair</span><output id="zvalue-smell">90 px</output></span>
+                <input type="range" id="zslider-smell">
+                <span class="control__help">Distance à laquelle un zombie repère un humain (plus loin s'il est caché dans un bâtiment).</span>
+              </label>
+              <label class="control" for="zslider-lifespan">
+                <span class="control__row"><span>Décomposition</span><output id="zvalue-lifespan">12 j</output></span>
+                <input type="range" id="zslider-lifespan">
+                <span class="control__help">Jours avant qu'un zombie tombe en poussière (0 = immortels).</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Humains</h3>
+              <label class="control" for="zslider-defense">
+                <span class="control__row"><span>Combativité</span><output id="zvalue-defense">35 %</output></span>
+                <input type="range" id="zslider-defense">
+                <span class="control__help">Chance de neutraliser un zombie au corps à corps : faible par surprise, meilleure retranché chez soi, forte pour un survivaliste.</span>
+              </label>
+              <label class="control" for="zslider-fighters">
+                <span class="control__row"><span>Survivalistes</span><output id="zvalue-fighters">15 %</output></span>
+                <input type="range" id="zslider-fighters">
+                <span class="control__help">Part des habitants (les plus braves) qui chassent les zombies après l'alerte.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Se barricader</h3>
+              <label class="control" for="zslider-barricade">
+                <span class="control__row"><span>Réflexe barricade</span><output id="zvalue-barricade">45 %</output></span>
+                <input type="range" id="zslider-barricade">
+                <span class="control__help">Part des habitants (les plus prudents) qui s'enferment chez eux à l'alerte générale.</span>
+              </label>
+              <label class="control" for="zslider-barricadeStrength">
+                <span class="control__row"><span>Solidité des portes</span><output id="zvalue-barricadeStrength">60 %</output></span>
+                <input type="range" id="zslider-barricadeStrength">
+                <span class="control__help">Temps de siège avant que les zombies entrent : plus ils sont nombreux contre les murs, plus ça cède vite.</span>
+              </label>
+              <label class="control" for="zslider-supplies">
+                <span class="control__row"><span>Réserves de vivres</span><output id="zvalue-supplies">1,5 j</output></span>
+                <input type="range" id="zslider-supplies">
+                <span class="control__help">Une fois épuisées, les barricadés sortent piller le centre commercial, puis rentrent.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Remède</h3>
+              <label class="control" for="zslider-research">
+                <span class="control__row"><span>Vitesse de la recherche</span><output id="zvalue-research">50 %</output></span>
+                <input type="range" id="zslider-research">
+                <span class="control__help">Commence à l'alerte générale, ralentit quand il reste moins d'humains. Une fois prêt, les zombies redeviennent humains peu à peu.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Règles farfelues</h3>
+              <label class="switch"><input type="checkbox" id="ztoggle-sunFear"><span class="switch__track"></span>Les zombies craignent le soleil<span class="switch__help">Léthargiques le jour, déchaînés la nuit</span></label>
+              <label class="switch"><input type="checkbox" id="ztoggle-music"><span class="switch__track"></span>La musique les attire<span class="switch__help">Ils convergent vers les boîtes et le centre commercial ouverts</span></label>
+              <label class="switch"><input type="checkbox" id="ztoggle-fortressHospital"><span class="switch__track"></span>Hôpital-forteresse<span class="switch__help">Ses portes ne cèdent jamais</span></label>
+            </div>
+
+            <button type="button" class="btn btn--block" id="btn-reset-zombies">Fin de l'apocalypse (tout réinitialiser)</button>
           </div>
         </section>
 
-        <!-- -------------------------------- Ville -------------------------------- -->
+        <!-- =============================== VILLE =============================== -->
         <section class="tabpanel" id="tab-city" role="tabpanel" aria-labelledby="tab-btn-city" hidden>
-          <div class="card">
-            <h3>Lieux</h3>
-            <ul class="places" id="places-list"></ul>
-          </div>
-
-          <div class="card">
-            <h3>Où se contamine-t-on ?</h3>
-            <ul class="bars" id="contagion-bars"></ul>
-            <p class="note">Jamais chez soi : seulement au travail, dans les lieux publics et, un peu, dans la rue.</p>
-          </div>
-
           <div class="card">
             <h3>Générer la ville</h3>
             <label class="control" for="slider-population">
@@ -236,220 +450,32 @@
               <input type="range" id="slider-density">
               <span class="control__scale"><span>Campagne</span><span>Centre-ville</span></span>
             </label>
-            <button type="button" class="btn btn--primary btn--block" id="btn-regenerate">Régénérer la ville</button>
-          </div>
-        </section>
+            <label class="control" for="slider-chaos">
+              <span class="control__row"><span>Désordre</span><output id="value-chaos">40 %</output></span>
+              <input type="range" id="slider-chaos">
+              <span class="control__scale"><span>Quadrillage</span><span>Vieille ville</span></span>
+              <span class="control__help">Îlots de tailles inégales, grandes avenues et boulevards, îlots fusionnés, façades irrégulières.</span>
+            </label>
+            <label class="control" for="slider-green">
+              <span class="control__row"><span>Espaces verts</span><output id="value-green">30 %</output></span>
+              <input type="range" id="slider-green">
+              <span class="control__help">Jardins, et îlots entiers transformés en parcs.</span>
+            </label>
+            <label class="switch"><input type="checkbox" id="toggle-river"><span class="switch__track"></span>Rivière<span class="switch__help">Traverse la ville en serpentant ; on ne la franchit que par quelques ponts</span></label>
 
-        <!-- ------------------------------- Zombies ------------------------------- -->
-        <section class="tabpanel" id="tab-zombies" role="tabpanel" aria-labelledby="tab-btn-zombies" hidden>
-          <div class="status" id="zombie-status" data-level="calm">
-            <strong id="zombie-status-title">Ville épargnée</strong>
-            <span id="zombie-status-text">Aucun zombie. Lâchez-en un pour commencer.</span>
-          </div>
-
-          <div class="tiles">
-            <div class="tile">
-              <span class="tile__label">Humains</span>
-              <span class="tile__value" id="zstat-humans">0</span>
+            <div class="seed-row">
+              <label for="seed-input">Graine</label>
+              <input type="text" inputmode="numeric" id="seed-input" autocomplete="off" spellcheck="false">
+              <button type="button" class="btn" id="btn-seed">Appliquer</button>
             </div>
-            <div class="tile">
-              <span class="tile__label">Zombies</span>
-              <span class="tile__value" id="zstat-zombies">0</span>
-            </div>
-            <div class="tile">
-              <span class="tile__label">Mordus (en sursis)</span>
-              <span class="tile__value" id="zstat-bitten">0</span>
-            </div>
-            <div class="tile">
-              <span class="tile__label">Pertes humaines</span>
-              <span class="tile__value" id="zstat-lost">0</span>
-            </div>
+            <button type="button" class="btn btn--primary btn--block" id="btn-regenerate">Nouvelle ville au hasard</button>
+            <p class="note">Les curseurs s'appliquent au relâchement et gardent la même graine : on voit l'effet sur la même ville.</p>
           </div>
 
           <div class="card">
-            <h3>Déclencher</h3>
-            <div class="actions">
-              <button type="button" class="btn btn--zombie" id="btn-zombie">Lâcher un zombie</button>
-              <button type="button" class="btn" id="btn-horde">Lâcher une horde</button>
-            </div>
-            <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
-            <div class="segmented" role="radiogroup" aria-label="Action du clic sur la carte">
-              <button type="button" role="radio" data-click="infect">Virus</button>
-              <button type="button" role="radio" data-click="zombie">Zombie</button>
-              <button type="button" role="radio" data-click="strike">Frappe aérienne</button>
-            </div>
-            <p class="note">La frappe aérienne neutralise tout ce qui est dans la rue dans un rayon de 45 px, humains et forces de l'ordre compris. Les bâtiments protègent.</p>
+            <h3>Lieux</h3>
+            <ul class="places" id="places-list"></ul>
           </div>
-
-          <div class="card">
-            <h3>Riposte</h3>
-            <p class="note note--top">Population transformée : <b id="zstat-share">0 %</b>. Chaque riposte se déclenche quand la jauge atteint son seuil (repère blanc).</p>
-
-            <div class="response">
-              <div class="response__head">
-                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-policeOn"><span class="switch__track"></span><i class="unit unit--police"></i>Police</label>
-                <span class="badge" id="resp-police-state">en attente</span>
-              </div>
-              <div class="gauge"><div class="gauge__fill" id="resp-police-fill"></div><div class="gauge__mark" id="resp-police-mark"></div></div>
-              <p class="response__stats" id="resp-police-stats">Intervient dès les premiers cas, depuis le commissariat.</p>
-              <div class="response__sliders">
-                <label class="control" for="zslider-policeThreshold">
-                  <span class="control__row"><span>Seuil</span><output id="zvalue-policeThreshold">1 %</output></span>
-                  <input type="range" id="zslider-policeThreshold">
-                </label>
-                <label class="control" for="zslider-policeCount">
-                  <span class="control__row"><span>Agents</span><output id="zvalue-policeCount">8</output></span>
-                  <input type="range" id="zslider-policeCount">
-                </label>
-              </div>
-            </div>
-
-            <div class="response">
-              <div class="response__head">
-                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-wallsOn"><span class="switch__track"></span><i class="unit unit--wall"></i>Barricades de rue</label>
-                <span class="badge" id="resp-walls-state">en attente</span>
-              </div>
-              <div class="gauge"><div class="gauge__fill" id="resp-walls-fill"></div><div class="gauge__mark" id="resp-walls-mark"></div></div>
-              <p class="response__stats" id="resp-walls-stats">Les habitants barrent les rues au contact du front. Seuls les zombies sont bloqués.</p>
-              <div class="response__sliders">
-                <label class="control" for="zslider-wallThreshold">
-                  <span class="control__row"><span>Seuil</span><output id="zvalue-wallThreshold">10 %</output></span>
-                  <input type="range" id="zslider-wallThreshold">
-                </label>
-                <label class="control" for="zslider-wallCount">
-                  <span class="control__row"><span>Barricades</span><output id="zvalue-wallCount">12</output></span>
-                  <input type="range" id="zslider-wallCount">
-                </label>
-              </div>
-            </div>
-
-            <div class="response">
-              <div class="response__head">
-                <label class="switch switch--inline"><input type="checkbox" id="ztoggle-armyOn"><span class="switch__track"></span><i class="unit unit--army"></i>Armée</label>
-                <span class="badge" id="resp-army-state">en attente</span>
-              </div>
-              <div class="gauge"><div class="gauge__fill" id="resp-army-fill"></div><div class="gauge__mark" id="resp-army-mark"></div></div>
-              <p class="response__stats" id="resp-army-stats">Entre par le bord de la carte le plus proche de l'invasion. Blindée, tire plus loin.</p>
-              <div class="response__sliders">
-                <label class="control" for="zslider-armyThreshold">
-                  <span class="control__row"><span>Seuil</span><output id="zvalue-armyThreshold">25 %</output></span>
-                  <input type="range" id="zslider-armyThreshold">
-                </label>
-                <label class="control" for="zslider-armyCount">
-                  <span class="control__row"><span>Soldats</span><output id="zvalue-armyCount">30</output></span>
-                  <input type="range" id="zslider-armyCount">
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card__head">
-              <h3>Humains contre zombies</h3>
-              <ul class="chips" id="zombie-chart-legend"></ul>
-            </div>
-            <div class="chart">
-              <canvas id="zombie-chart" class="chart__canvas" aria-label="Évolution : humains, mordus, zombies et pertes au fil des jours"></canvas>
-              <div class="chart__tooltip" id="zombie-chart-tooltip" hidden></div>
-            </div>
-            <ul class="rows rows--spaced">
-              <li>Barricadés chez eux<b id="zstat-barricaded">0</b></li>
-              <li><i class="dot dot--ring dot--ring-fighter"></i>Survivalistes<b id="zstat-fighters">0</b></li>
-              <li>Zombies neutralisés<b id="zstat-destroyed">0</b></li>
-              <li>Dévorés<b id="zstat-devoured">0</b></li>
-              <li>Civils tués par les frappes<b id="zstat-killed">0</b></li>
-              <li>Guéris par le remède<b id="zstat-cured">0</b></li>
-            </ul>
-          </div>
-
-          <div class="card">
-            <h3>Remède</h3>
-            <div class="meter">
-              <div class="meter__row">
-                <span>Recherche à l'hôpital</span>
-                <b id="zstat-cure">0 %</b>
-              </div>
-              <div class="meter__track"><div class="meter__fill meter__fill--cure" id="meter-cure"></div></div>
-            </div>
-            <label class="control control--after-meter" for="zslider-research">
-              <span class="control__row"><span>Vitesse de la recherche</span><output id="zvalue-research">50 %</output></span>
-              <input type="range" id="zslider-research">
-              <span class="control__help">Commence à l'alerte générale, et ralentit quand il reste moins d'humains pour chercher. Une fois prêt, les zombies redeviennent humains peu à peu.</span>
-            </label>
-          </div>
-
-          <div class="card">
-            <h3>Journal de l'apocalypse</h3>
-            <ol class="log" id="zombie-log">
-              <li class="log__empty">Rien à signaler… pour l'instant.</li>
-            </ol>
-          </div>
-
-          <div class="card">
-            <h3>Morsure</h3>
-            <label class="control" for="zslider-biteInfect">
-              <span class="control__row"><span>Contagiosité</span><output id="zvalue-biteInfect">70 %</output></span>
-              <input type="range" id="zslider-biteInfect">
-              <span class="control__help">Chance qu'une morsure transforme la victime. Sinon, elle est dévorée.</span>
-            </label>
-            <label class="control" for="zslider-turnDelay">
-              <span class="control__row"><span>Délai de transformation</span><output id="zvalue-turnDelay">6 h</output></span>
-              <input type="range" id="zslider-turnDelay">
-              <span class="control__help">Un mordu garde sa vie normale pendant ce temps… et peut se transformer chez lui, au bureau ou en boîte.</span>
-            </label>
-          </div>
-
-          <div class="card">
-            <h3>Zombies</h3>
-            <label class="control" for="zslider-speed">
-              <span class="control__row"><span>Vitesse</span><output id="zvalue-speed">60 %</output></span>
-              <input type="range" id="zslider-speed">
-              <span class="control__scale"><span>Lents, à l'ancienne</span><span>Sprinteurs</span></span>
-            </label>
-            <label class="control" for="zslider-smell">
-              <span class="control__row"><span>Flair</span><output id="zvalue-smell">90 px</output></span>
-              <input type="range" id="zslider-smell">
-              <span class="control__help">Distance à laquelle un zombie repère un humain dans la rue.</span>
-            </label>
-            <label class="control" for="zslider-lifespan">
-              <span class="control__row"><span>Décomposition</span><output id="zvalue-lifespan">12 j</output></span>
-              <input type="range" id="zslider-lifespan">
-              <span class="control__help">Jours avant qu'un zombie tombe en poussière (0 = immortels).</span>
-            </label>
-          </div>
-
-          <div class="card">
-            <h3>Humains</h3>
-            <label class="control" for="zslider-defense">
-              <span class="control__row"><span>Combativité</span><output id="zvalue-defense">35 %</output></span>
-              <input type="range" id="zslider-defense">
-              <span class="control__help">Chance de neutraliser un zombie au corps à corps (bien plus élevée pour un survivaliste).</span>
-            </label>
-            <label class="control" for="zslider-fighters">
-              <span class="control__row"><span>Survivalistes</span><output id="zvalue-fighters">15 %</output></span>
-              <input type="range" id="zslider-fighters">
-              <span class="control__help">Part des habitants (les plus braves) qui chassent les zombies au lieu de fuir.</span>
-            </label>
-            <label class="control" for="zslider-barricade">
-              <span class="control__row"><span>Réflexe barricade</span><output id="zvalue-barricade">60 %</output></span>
-              <input type="range" id="zslider-barricade">
-              <span class="control__help">Part des habitants (les plus prudents) qui s'enferment chez eux à l'alerte générale.</span>
-            </label>
-            <label class="control" for="zslider-barricadeStrength">
-              <span class="control__row"><span>Solidité des barricades</span><output id="zvalue-barricadeStrength">75 %</output></span>
-              <input type="range" id="zslider-barricadeStrength">
-              <span class="control__help">Les zombies qui rôdent contre un bâtiment occupé finissent par entrer.</span>
-            </label>
-          </div>
-
-          <div class="card">
-            <h3>Règles farfelues</h3>
-            <label class="switch"><input type="checkbox" id="ztoggle-sunFear"><span class="switch__track"></span>Les zombies craignent le soleil<span class="switch__help">Léthargiques le jour, déchaînés la nuit</span></label>
-            <label class="switch"><input type="checkbox" id="ztoggle-music"><span class="switch__track"></span>La musique les attire<span class="switch__help">Ils convergent vers les boîtes et le centre commercial ouverts</span></label>
-            <label class="switch"><input type="checkbox" id="ztoggle-fortressHospital"><span class="switch__track"></span>Hôpital-forteresse<span class="switch__help">Ses barricades ne cèdent jamais</span></label>
-          </div>
-
-          <button type="button" class="btn btn--block" id="btn-reset-zombies">Fin de l'apocalypse (tout réinitialiser)</button>
         </section>
       </div>
 

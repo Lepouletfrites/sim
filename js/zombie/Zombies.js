@@ -19,6 +19,7 @@ export const ZOMBIE_SLIDERS = [
   { key: 'fighters', unit: '%' },
   { key: 'barricade', unit: '%' },
   { key: 'barricadeStrength', unit: '%' },
+  { key: 'supplies', unit: 'j' },
   { key: 'research', unit: '%' },
   { key: 'policeThreshold', unit: '%' },
   { key: 'policeCount', unit: 'n' },
@@ -81,6 +82,8 @@ export class Zombies {
     this.buffer = new Int32Array(512);
     this.buildingBuffer = [];
     this.occupants = new Map();
+    this.zombiesInside = new Map();
+    this.tickId = 0;
     this.counts = {};
     this.share = 0;
     this.response = new Response(this);
@@ -201,10 +204,17 @@ export class Zombies {
       }
       c.speedFactor = c.health === Health.SYMPTOMATIC ? CONFIG.epidemic.sickSpeedFactor : 1;
       c.barricaded = false;
+      c.looting = false;
+      c.lootTarget = -1;
+      c.siegeTarget = -1;
       c.target = null;
       c.threat = null;
       c.musicVenue = -1;
       if (c.alive) this.routine.replan(c);
+    }
+    for (const b of this.city.buildings) {
+      b.siege = 0;
+      b.breached = false;
     }
     this.resetState();
     this.recount();
@@ -218,7 +228,7 @@ export class Zombies {
 
     if (c.zombie === ZombieState.ZOMBIE) {
       const t = c.target;
-      if (t !== null && t.alive && t.zombie === ZombieState.HUMAN && t.place < 0) {
+      if (t !== null && t.alive && t.zombie === ZombieState.HUMAN && t.place === c.place) {
         const dx = t.x - c.x;
         const dy = t.y - c.y;
         const d = Math.hypot(dx, dy);
@@ -228,12 +238,12 @@ export class Zombies {
         }
         return true;
       }
-      return c.field !== null && c.field.steer(c);
+      return c.place < 0 && c.field !== null && c.field.steer(c);
     }
 
     const z = c.threat;
     if (z === null) return false;
-    if (!z.alive || z.zombie !== ZombieState.ZOMBIE) {
+    if (!z.alive || z.zombie !== ZombieState.ZOMBIE || z.place !== c.place) {
       c.threat = null;
       return false;
     }
@@ -273,6 +283,7 @@ export class Zombies {
       noisy: s.music ? this.openNoisyVenues() : null,
     };
 
+    this.tickId++;
     this.buildOccupants();
     for (let i = 0; i < citizens.length; i++) {
       const c = citizens[i];
@@ -280,6 +291,7 @@ export class Zombies {
       if (c.zombie === ZombieState.ZOMBIE) this.updateZombie(c, env);
       else this.updateHuman(c, hours);
     }
+    this.updateBuildings(hours);
 
     this.recount();
     this.updateAlarm();
@@ -316,15 +328,71 @@ export class Zombies {
     const hide = this.alarm && !c.fighter && c.caution > 1 - s.barricade;
     if (hide !== c.barricaded) {
       c.barricaded = hide;
+      c.looting = false;
+      c.lootTarget = -1;
+      if (hide) c.supplies = s.supplies * 24 * this.rng.range(0.6, 1.4);
       this.routine.replan(c);
     }
+    if (c.barricaded) this.updateSupplies(c, hours);
 
-    // Repérer le zombie le plus proche : on le fuit (ou on l'attaque).
-    // Avant l'alerte, personne ne sait : les passants se font surprendre.
+    // Repérer le zombie le plus proche (dans le même lieu) : on le fuit ou on l'attaque.
+    // Avant l'alerte, les passants se font surprendre ; mais un zombie dans le salon, ça se voit.
     c.threat = null;
-    if (c.place >= 0 || !this.alarm) return;
-    const radius = c.fighter ? Math.max(cfg.fearRadius, s.smell) : cfg.fearRadius;
+    if (c.place < 0 && !this.alarm) return;
+    if (c.place >= 0 && (this.zombiesInside.get(c.place) ?? 0) === 0) return;
+    const radius = c.place >= 0 ? 200 : c.fighter ? Math.max(cfg.fearRadius, s.smell) : cfg.fearRadius;
     c.threat = this.nearest(c, radius, (o) => o.zombie === ZombieState.ZOMBIE);
+  }
+
+  /** Vivres des barricadés : une fois épuisés, on sort piller, puis on rentre. */
+  updateSupplies(c, hours) {
+    const s = this.settings;
+    if (!c.looting) {
+      c.supplies -= hours;
+      if (c.supplies > 0) return;
+      const target = this.lootTargetFor(c);
+      if (target < 0) {
+        c.supplies = 24; // rien à piller : on se rationne
+        return;
+      }
+      c.looting = true;
+      c.lootTarget = target;
+      const [min, max] = CONFIG.zombie.lootDuration;
+      c.lootTimer = this.rng.range(min, max);
+      this.routine.replan(c);
+      this.logThrottled('loot', 12, `Les vivres manquent : des habitants sortent piller ${this.lootName(target)}.`, 'bad');
+    } else if (c.place === c.lootTarget) {
+      c.lootTimer -= hours;
+      if (c.lootTimer > 0) return;
+      c.looting = false;
+      c.lootTarget = -1;
+      c.supplies = s.supplies * 24 * this.rng.range(0.6, 1.4);
+      this.routine.replan(c); // retour à la maison, barricadé
+    }
+  }
+
+  /** Centre commercial le plus proche du domicile, à défaut un restaurant. */
+  lootTargetFor(c) {
+    const city = this.city;
+    const from = c.home >= 0 ? city.buildings[c.home] : { x: c.x, y: c.y, w: 0, h: 0 };
+    for (const type of [PlaceType.MALL, PlaceType.RESTAURANT]) {
+      let best = -1;
+      let bestD2 = Infinity;
+      for (const i of city.byType[type]) {
+        const b = city.buildings[i];
+        const d2 = (b.x + b.w / 2 - from.x - from.w / 2) ** 2 + (b.y + b.h / 2 - from.y - from.h / 2) ** 2;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          best = i;
+        }
+      }
+      if (best >= 0) return best;
+    }
+    return -1;
+  }
+
+  lootName(b) {
+    return this.city.buildings[b].type === PlaceType.MALL ? 'le centre commercial' : 'les restaurants';
   }
 
   updateZombie(z, env) {
@@ -344,22 +412,40 @@ export class Zombies {
       return;
     }
 
-    // Proie la plus proche dans la rue (les mordus ne les intéressent plus).
-    z.target = this.nearest(z, env.smell, (o) => o.zombie === ZombieState.HUMAN && o.place < 0);
+    // Proie la plus proche dans le même lieu (les mordus ne les intéressent plus).
+    const range = z.place >= 0 ? 200 : env.smell;
+    z.target = this.nearest(z, range, (o) => o.zombie === ZombieState.HUMAN);
 
     // Contacts : combat ou morsure.
     const citizens = this.population.citizens;
     const count = this.population.grid.query(z.x, z.y, this.buffer);
     for (let k = 0; k < count; k++) {
       const h = citizens[this.buffer[k]];
-      if (!h || !h.alive || h.zombie !== ZombieState.HUMAN || h.place >= 0) continue;
+      if (!h || !h.alive || h.zombie !== ZombieState.HUMAN || h.place !== z.place) continue;
       const reach = z.radius + h.radius + cfg.contactExtra;
       if ((h.x - z.x) ** 2 + (h.y - z.y) ** 2 > reach * reach) continue;
       if (this.fight(z, h, env.dt)) return; // zombie neutralisé
     }
 
-    // Sans proie : attiré par la musique, et assiège ce qui est occupé.
-    if (z.target === null && env.noisy && env.noisy.length > 0) {
+    // À l'intérieur : quand il n'y a plus personne à mordre, on ressort.
+    if (z.place >= 0) {
+      if (z.target === null) {
+        this.routine.leave(z);
+        z.siegeTarget = -1;
+        z.field = null;
+      }
+      return;
+    }
+    if (z.target !== null) return;
+
+    // Sans proie dans la rue : on flaire les humains cachés dans les bâtiments…
+    if (this.chooseSiege(z, env.smell * cfg.occupiedSmell)) {
+      this.siege(z, env.hours);
+      return;
+    }
+
+    // … ou, à défaut, on suit la musique.
+    if (env.noisy && env.noisy.length > 0) {
       let best = -1;
       let bestD2 = Infinity;
       for (const b of env.noisy) {
@@ -377,20 +463,58 @@ export class Zombies {
       z.musicVenue = -1;
       z.field = null;
     }
-    if (z.target === null) this.siege(z, env.hours);
+  }
+
+  /** Garde (ou choisit) le bâtiment occupé le plus proche à assiéger. @returns {boolean} */
+  chooseSiege(z, range) {
+    const fortress = this.settings.fortressHospital ? this.city.hospitalIndex : -2;
+    const current = z.siegeTarget;
+    if (current >= 0 && current !== fortress && this.hasHumans(current)) return true;
+
+    let best = -1;
+    let bestD = range;
+    for (const [index, list] of this.occupants) {
+      if (index === fortress || !list.some((c) => c.zombie === ZombieState.HUMAN)) continue;
+      const d = distanceToRect(z.x, z.y, this.city.buildings[index]);
+      if (d < bestD) {
+        bestD = d;
+        best = index;
+      }
+    }
+    if (best < 0) {
+      if (current >= 0) {
+        z.siegeTarget = -1;
+        z.field = null;
+      }
+      return false;
+    }
+    z.siegeTarget = best;
+    z.field = this.city.fieldTo(best);
+    z.musicVenue = -1;
+    return true;
+  }
+
+  hasHumans(index) {
+    const list = this.occupants.get(index);
+    return !!list && list.some((c) => c.zombie === ZombieState.HUMAN);
   }
 
   /** @returns {boolean} true si le zombie a été neutralisé */
   fight(z, h, dt) {
     const cfg = CONFIG.zombie;
     const s = this.settings;
-    const defense = s.defense * cfg.defenseRate * (h.fighter ? cfg.fighterDefense : cfg.civilianDefense);
+    // Avant l'alerte, même un survivaliste est pris par surprise.
+    const ready = h.fighter && this.alarm;
+    const surprise = this.alarm ? 1 : cfg.surpriseDefense;
+    const shelter = this.alarm && h.place >= 0 ? cfg.shelterDefense : 1;
+    const defense = s.defense * cfg.defenseRate * surprise * shelter *
+      (ready ? cfg.fighterDefense : cfg.civilianDefense);
     if (defense > 0 && this.rng.chance(1 - Math.exp(-defense * dt))) {
       this.destroy(z);
-      if (h.fighter) this.logThrottled('fighter', 12, 'Des survivalistes repoussent les zombies.', 'good');
+      if (ready) this.logThrottled('fighter', 12, 'Des survivalistes repoussent les zombies.', 'good');
       return true;
     }
-    const bite = cfg.biteRate * (h.fighter ? 0.6 : 1);
+    const bite = cfg.biteRate * (ready ? 0.6 : 1);
     if (this.rng.chance(1 - Math.exp(-bite * dt))) {
       if (this.rng.chance(s.biteInfect)) this.bite(h);
       else this.kill(h, ZombieState.DEVOURED);
@@ -398,28 +522,47 @@ export class Zombies {
     return false;
   }
 
-  /** Un zombie collé à un bâtiment occupé tente d'enfoncer la barricade. */
+  /**
+   * Siège : collé au bâtiment, le zombie use la barricade. Plus ils sont nombreux,
+   * plus elle cède vite. Une fois l'entrée forcée, les zombies entrent.
+   */
   siege(z, hours) {
     const cfg = CONFIG.zombie;
-    const s = this.settings;
-    const n = this.city.getBuildingsNear(z.x, z.y, z.radius + 8, this.buildingBuffer);
-    for (let k = 0; k < n; k++) {
-      const b = this.buildingBuffer[k];
-      if (distanceToRect(z.x, z.y, b) > z.radius + 8) continue;
-      const inside = this.occupants.get(b.index);
-      if (!inside || inside.length === 0) continue;
-      if (b.index === this.city.hospitalIndex && s.fortressHospital) continue;
-      const rate = cfg.breachRate * (1 - s.barricadeStrength);
-      if (!this.rng.chance(1 - Math.exp(-rate * hours))) continue;
-      const victims = inside.filter((c) => c.zombie === ZombieState.HUMAN);
-      if (victims.length === 0) continue;
-      this.bite(this.rng.pick(victims));
+    const b = this.city.buildings[z.siegeTarget];
+    if (distanceToRect(z.x, z.y, b) > z.radius + 8) return; // encore en route
+
+    if (!b.breached) {
+      b.siege = (b.siege ?? 0) + hours;
+      b.siegeTick = this.tickId;
+      const threshold = cfg.breachMin + cfg.breachRange * this.settings.barricadeStrength;
+      if (b.siege < threshold) return;
+      b.breached = true;
+      b.sealTimer = 0;
       this.logThrottled(
         `breach-${b.type}`, 6,
-        `Barricade enfoncée (${PLACE_LABELS[b.type].toLowerCase()}) : les zombies entrent !`,
+        `Les zombies forcent l'entrée (${PLACE_LABELS[b.type].toLowerCase()}) !`,
         'bad',
       );
-      return;
+    }
+    this.routine.enter(z, b.index);
+    z.siegeTarget = -1;
+    z.field = null;
+  }
+
+  /** Barricades des bâtiments : réparation sans assaillant, fermeture une fois les zombies partis. */
+  updateBuildings(hours) {
+    const cfg = CONFIG.zombie;
+    for (const b of this.city.buildings) {
+      if (b.siege > 0 && b.siegeTick !== this.tickId) {
+        b.siege = Math.max(0, b.siege - cfg.siegeDecay * hours);
+      }
+      if (!b.breached) continue;
+      if ((this.zombiesInside.get(b.index) ?? 0) > 0) {
+        b.sealTimer = 0;
+      } else if ((b.sealTimer += hours) >= cfg.reseal) {
+        b.breached = false;
+        b.siege = 0;
+      }
     }
   }
 
@@ -447,27 +590,24 @@ export class Zombies {
     c.extraSpace = 0;
     c.speedFactor = this.settings.speed;
 
-    // Transformation à l'intérieur : les occupants sont pris au piège.
-    if (where >= 0) {
-      const inside = this.occupants.get(where) ?? [];
-      let bitten = 0;
-      for (const o of inside) {
-        if (o !== c && o.alive && o.zombie === ZombieState.HUMAN && this.rng.chance(CONFIG.zombie.indoorOutbreak)) {
-          this.bite(o);
-          bitten++;
-        }
-      }
-      if (bitten > 0) {
-        const type = this.city.buildings[where].type;
-        this.logThrottled(`outbreak-${type}`, 6,
-          `Foyer : un mordu se transforme (${PLACE_LABELS[type].toLowerCase()}), ${bitten} personne${bitten > 1 ? 's' : ''} mordue${bitten > 1 ? 's' : ''}.`,
-          'bad');
-      }
-      this.routine.leave(c);
-    }
+    c.looting = false;
+    c.lootTarget = -1;
+    c.siegeTarget = -1;
     c.destination = -1;
     c.field = null;
     c.musicVenue = -1;
+
+    // Transformation à l'intérieur : le zombie reste dans la pièce, avec les occupants.
+    if (where >= 0) {
+      this.zombiesInside.set(where, (this.zombiesInside.get(where) ?? 0) + 1);
+      const others = (this.occupants.get(where) ?? []).filter((o) => o !== c && o.zombie === ZombieState.HUMAN).length;
+      if (others > 0) {
+        const type = this.city.buildings[where].type;
+        this.logThrottled(`outbreak-${type}`, 6,
+          `Foyer : un mordu se transforme (${PLACE_LABELS[type].toLowerCase()}), ${others} personne${others > 1 ? 's' : ''} prise${others > 1 ? 's' : ''} au piège.`,
+          'bad');
+      }
+    }
   }
 
   destroy(z) {
@@ -545,11 +685,17 @@ export class Zombies {
     }
   }
 
+  /** Humains (et nombre de zombies) présents dans chaque bâtiment. */
   buildOccupants() {
     const occupants = this.occupants;
     for (const list of occupants.values()) list.length = 0;
+    this.zombiesInside.clear();
     for (const c of this.population.citizens) {
-      if (!c.alive || c.place < 0 || c.zombie > ZombieState.BITTEN) continue;
+      if (!c.alive || c.place < 0) continue;
+      if (c.zombie === ZombieState.ZOMBIE) {
+        this.zombiesInside.set(c.place, (this.zombiesInside.get(c.place) ?? 0) + 1);
+        continue;
+      }
       let list = occupants.get(c.place);
       if (!list) occupants.set(c.place, (list = []));
       list.push(c);
@@ -565,7 +711,7 @@ export class Zombies {
     return venues;
   }
 
-  /** Voisin le plus proche (dans la rue) qui vérifie `accept`, dans le rayon. */
+  /** Voisin le plus proche, dans le même lieu (rue ou bâtiment), qui vérifie `accept`. */
   nearest(c, radius, accept) {
     const citizens = this.population.citizens;
     const count = this.population.grid.queryRadius(c.x, c.y, radius, this.buffer);
@@ -573,7 +719,7 @@ export class Zombies {
     let bestD2 = radius * radius;
     for (let k = 0; k < count; k++) {
       const o = citizens[this.buffer[k]];
-      if (!o || o === c || !o.alive || o.place >= 0 || !accept(o)) continue;
+      if (!o || o === c || !o.alive || o.place !== c.place || !accept(o)) continue;
       const d2 = (o.x - c.x) ** 2 + (o.y - c.y) ** 2;
       if (d2 < bestD2) {
         bestD2 = d2;
@@ -604,17 +750,23 @@ export class Zombies {
     counts.devoured = 0;
     counts.killed = 0;
     counts.barricaded = 0;
+    counts.looting = 0;
+    counts.invaded = 0;
     counts.fighters = 0;
     for (const c of this.population.citizens) {
       switch (c.zombie) {
         case ZombieState.HUMAN:
           if (!c.alive) break;
           counts.humans++;
-          if (c.barricaded) counts.barricaded++;
+          if (c.looting) counts.looting++;
+          else if (c.barricaded) counts.barricaded++;
           if (c.fighter) counts.fighters++;
           break;
         case ZombieState.BITTEN: if (c.alive) counts.bitten++; break;
-        case ZombieState.ZOMBIE: counts.zombies++; break;
+        case ZombieState.ZOMBIE:
+          counts.zombies++;
+          if (c.place >= 0) counts.invaded++;
+          break;
         case ZombieState.DESTROYED: counts.destroyed++; break;
         case ZombieState.DEVOURED: counts.devoured++; break;
         default: counts.killed++;

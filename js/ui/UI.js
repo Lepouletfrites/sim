@@ -11,6 +11,7 @@ const percent = (v) => `${Math.round(v)} %`;
 /** Curseurs de l'épidémie : clé du réglage = suffixe de l'id du slider. */
 const EPIDEMIC_SLIDERS = ['transmission', 'virulence', 'responsibility', 'prudence'];
 const POLICIES = ['closeNightclubs', 'closeCommerce', 'telework'];
+const CITY_SLIDERS = ['density', 'chaos', 'green'];
 const PLACES_SHOWN = [
   PlaceType.HOME, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT,
   PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, STREET,
@@ -31,6 +32,53 @@ const HEALTH_SEGMENTS = [
 const SPEED_KEYS = { 1: 1, 2: 5, 3: 10, 4: 25, 5: 50 };
 const TAB_STORAGE_KEY = 'citysim.tab';
 
+const storage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null; // stockage indisponible (navigation privée...) : valeur par défaut
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      // sans importance
+    }
+  },
+};
+
+/**
+ * Groupe d'onglets accessible : clic, flèches gauche/droite, onglet actif mémorisé.
+ * Chaque bouton désigne son panneau par aria-controls ; `dataKey` est l'attribut data-* qui le nomme.
+ */
+function setupTabGroup(buttons, storageKey, dataKey) {
+  const select = (tab, remember = true) => {
+    for (const t of buttons) {
+      const selected = t === tab;
+      t.setAttribute('aria-selected', String(selected));
+      t.tabIndex = selected ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !selected;
+    }
+    if (remember) storage.set(storageKey, tab.dataset[dataKey]);
+  };
+
+  const saved = storage.get(storageKey);
+  select(buttons.find((t) => t.dataset[dataKey] === saved) ?? buttons[0], false);
+
+  buttons.forEach((tab, index) => {
+    tab.addEventListener('click', () => select(tab));
+    tab.addEventListener('keydown', (event) => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      const next = buttons[(index + step + buttons.length) % buttons.length];
+      select(next);
+      next.focus();
+    });
+  });
+}
+
 /**
  * Interface : barre d'outils au-dessus de la carte, légende de la carte et
  * panneau latéral à onglets. Lie le DOM aux callbacks de l'application,
@@ -41,8 +89,9 @@ export class UI {
     onTimeScale,
     onTogglePause,
     onPopulation,
-    onDensity,
+    onCityOptions,
     onRegenerate,
+    onSeed,
     onSetting,
     onInfect,
     onResetEpidemic,
@@ -79,8 +128,6 @@ export class UI {
       counts: Object.fromEntries(COUNTS.map((key) => [key, $(`#stat-${key}`)])),
       popSlider: $('#slider-population'),
       popValue: $('#value-population'),
-      densitySlider: $('#slider-density'),
-      densityValue: $('#value-density'),
       fps: $('#stat-fps'),
       steps: $('#stat-steps'),
       buildings: $('#stat-buildings'),
@@ -109,15 +156,28 @@ export class UI {
       onPopulation(value);
     });
 
-    this.el.densitySlider.addEventListener('input', () => {
-      this.el.densityValue.textContent = this.el.densitySlider.value;
-    });
-    // La régénération est coûteuse : on attend le relâchement du slider.
-    this.el.densitySlider.addEventListener('change', () => {
-      onDensity(Number(this.el.densitySlider.value));
-    });
+    // Forme de la ville : la régénération est coûteuse, on attend le relâchement du curseur.
+    for (const key of CITY_SLIDERS) {
+      const slider = $(`#slider-${key}`);
+      const output = $(`#value-${key}`);
+      const format = key === 'density' ? (v) => v : percent;
+      slider.addEventListener('input', () => {
+        output.textContent = format(Number(slider.value));
+      });
+      slider.addEventListener('change', () => onCityOptions());
+    }
+    $('#toggle-river').addEventListener('change', () => onCityOptions());
 
     $('#btn-regenerate').addEventListener('click', onRegenerate);
+    const seedInput = $('#seed-input');
+    const applySeed = () => {
+      const value = Number.parseInt(seedInput.value, 10);
+      if (Number.isFinite(value) && value >= 0) onSeed(value >>> 0);
+    };
+    $('#btn-seed').addEventListener('click', applySeed);
+    seedInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') applySeed();
+    });
     $('#btn-infect').addEventListener('click', onInfect);
     $('#btn-reset-epidemic').addEventListener('click', onResetEpidemic);
 
@@ -151,42 +211,12 @@ export class UI {
 
   // ------------------------------------------------------------ Construction
 
-  /** Onglets accessibles (clic, flèches gauche/droite), onglet actif mémorisé. */
+  /** Onglets principaux et sous-onglets de chaque section. */
   setupTabs() {
-    this.tabs = [...document.querySelectorAll('[role="tab"]')];
-    let saved = null;
-    try {
-      saved = localStorage.getItem(TAB_STORAGE_KEY);
-    } catch {
-      // stockage indisponible (navigation privée...) : onglet par défaut
-    }
-    const initial = this.tabs.find((t) => t.dataset.tab === saved) ?? this.tabs[0];
-    this.selectTab(initial, false);
-
-    this.tabs.forEach((tab, index) => {
-      tab.addEventListener('click', () => this.selectTab(tab));
-      tab.addEventListener('keydown', (event) => {
-        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-        if (!step) return;
-        const next = this.tabs[(index + step + this.tabs.length) % this.tabs.length];
-        this.selectTab(next);
-        next.focus();
-      });
-    });
-  }
-
-  selectTab(tab, remember = true) {
-    for (const t of this.tabs) {
-      const selected = t === tab;
-      t.setAttribute('aria-selected', String(selected));
-      t.tabIndex = selected ? 0 : -1;
-      document.getElementById(t.getAttribute('aria-controls')).hidden = !selected;
-    }
-    if (!remember) return;
-    try {
-      localStorage.setItem(TAB_STORAGE_KEY, tab.dataset.tab);
-    } catch {
-      // sans importance
+    setupTabGroup([...document.querySelectorAll('.tabs [role="tab"]')], TAB_STORAGE_KEY, 'tab');
+    for (const group of document.querySelectorAll('.subtabs')) {
+      const buttons = [...group.querySelectorAll('[role="tab"]')];
+      setupTabGroup(buttons, `${TAB_STORAGE_KEY}.${group.getAttribute('aria-label')}`, 'subtab');
     }
   }
 
@@ -278,17 +308,26 @@ export class UI {
     };
     init('population', citizens, citizens.step);
     init('density', city.density, 1);
+    init('chaos', city.chaos, 5, percent);
+    init('green', city.green, 5, percent);
+    $('#toggle-river').checked = city.river;
     for (const key of EPIDEMIC_SLIDERS) init(key, epidemic[key], 1, percent);
+  }
+
+  /** Réglages de forme de la ville (densité 1..10, désordre et verdure 0..1, rivière). */
+  get cityOptions() {
+    return {
+      density: Number($('#slider-density').value),
+      chaos: Number($('#slider-chaos').value) / 100,
+      green: Number($('#slider-green').value) / 100,
+      river: $('#toggle-river').checked,
+    };
   }
 
   // ------------------------------------------------------------ Mises à jour
 
   get population() {
     return Number(this.el.popSlider.value);
-  }
-
-  get density() {
-    return Number(this.el.densitySlider.value);
   }
 
   setTimeScale(scale) {
@@ -303,6 +342,7 @@ export class UI {
   setCityInfo(city) {
     this.el.buildings.textContent = city.buildings.length;
     this.el.seed.textContent = city.seed;
+    $('#seed-input').value = city.seed;
   }
 
   /** Horloge : mise à jour à chaque frame (texte court, peu coûteux). */

@@ -25,7 +25,11 @@ const ui = new UI({
   onTimeScale: setTimeScale,
   onTogglePause: () => setTimeScale(simulation.timeScale > 0 ? 0 : state.lastActiveScale),
   onPopulation: (count) => simulation.setPopulation(count),
-  onDensity: () => buildWorld(),
+  onCityOptions: () => buildWorld(),
+  onSeed: (seed) => {
+    state.seed = seed;
+    buildWorld();
+  },
   onRegenerate: () => {
     state.seed = Random.randomSeed();
     buildWorld();
@@ -87,27 +91,38 @@ function setTimeScale(scale) {
 function buildWorld() {
   const { width, height } = renderer;
   if (width < 50 || height < 50) return;
-  const city = new City(generateCity(width, height, state.seed, ui.density));
+  const { density, ...options } = ui.cityOptions;
+  const city = new City(generateCity(width, height, state.seed, density, options));
   simulation.load(city, ui.population, state.seed);
   renderer.setCity(city);
   ui.setCityInfo(city);
   refreshStats();
 }
 
-// --- Redimensionnement : le canvas suit son conteneur, la ville est régénérée
-// avec la même graine une fois le redimensionnement terminé.
+// --- Redimensionnement : le canvas suit son conteneur. La ville n'est régénérée
+// (même graine) que si la taille change vraiment : quelques pixels (barre de
+// défilement qui apparaît) ne doivent pas effacer la partie en cours.
+const RESIZE_REBUILD_MIN = 40; // px
 let resizeTimer = 0;
-let firstResize = true;
+let builtSize = null;
 new ResizeObserver(([entry]) => {
-  const { width, height } = entry.contentRect;
-  renderer.resize(Math.floor(width), Math.floor(height));
+  const width = Math.floor(entry.contentRect.width);
+  const height = Math.floor(entry.contentRect.height);
+  renderer.resize(width, height);
   clearTimeout(resizeTimer);
-  if (firstResize) {
-    firstResize = false;
+  if (builtSize === null) {
+    builtSize = { width, height };
     buildWorld();
-  } else {
-    resizeTimer = setTimeout(buildWorld, RESIZE_DEBOUNCE);
+    return;
   }
+  const changed =
+    Math.abs(width - builtSize.width) >= RESIZE_REBUILD_MIN ||
+    Math.abs(height - builtSize.height) >= RESIZE_REBUILD_MIN;
+  if (!changed) return;
+  resizeTimer = setTimeout(() => {
+    builtSize = { width: renderer.width, height: renderer.height };
+    buildWorld();
+  }, RESIZE_DEBOUNCE);
 }).observe(mapContainer);
 
 // --- Boucle principale

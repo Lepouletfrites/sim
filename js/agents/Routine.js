@@ -109,7 +109,8 @@ export class Routine {
       default:
     }
 
-    // Apocalypse : barricadé chez soi jusqu'à la fin de l'alerte.
+    // Apocalypse : on sort piller quand les vivres manquent, sinon on reste barricadé.
+    if (c.looting && c.lootTarget >= 0) return { building: c.lootTarget, until: Infinity, activity: 'loot' };
     if (c.barricaded) return { building: c.home, until: Infinity, activity: 'barricaded' };
 
     // Envie de sortir : freinée par la prudence face à l'inquiétude, et par la maladie.
@@ -235,6 +236,12 @@ export class Routine {
   arrive(c) {
     const b = c.destination;
     const building = this.city.buildings[b];
+    if (c.looting) {
+      // Pillage : ni horaires ni jauge.
+      this.enter(c, b);
+      this.occupancy[b]++;
+      return;
+    }
     if (!this.isOpen(building.type)) {
       // Fermé entre-temps : on change de programme.
       this.replan(c);

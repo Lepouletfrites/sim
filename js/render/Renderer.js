@@ -66,15 +66,7 @@ export class Renderer {
     const city = this.city;
     if (!city) return;
 
-    // Sol des îlots : vert à la campagne, gris en ville
-    ctx.fillStyle = mixHex(colors.groundRural, colors.groundUrban, city.params.t);
-    for (const b of city.blocks) ctx.fillRect(b.x, b.y, b.w, b.h);
-
-    // Parcelles non bâties : parcs et prés
-    ctx.fillStyle = colors.plaza;
-    for (const p of city.plazas) ctx.fillRect(p.x, p.y, p.w, p.h);
-
-    // Marquage central des avenues
+    // Marquage central des avenues (sous les îlots : il disparaît là où deux îlots ont fusionné)
     ctx.strokeStyle = colors.roadMark;
     ctx.lineWidth = 1;
     ctx.setLineDash([6, 8]);
@@ -89,6 +81,16 @@ export class Renderer {
     }
     ctx.stroke();
     ctx.setLineDash([]);
+
+    // Sol des îlots : vert à la campagne, gris en ville
+    ctx.fillStyle = mixHex(colors.groundRural, colors.groundUrban, city.params.t);
+    for (const b of city.blocks) ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    // Parcelles non bâties : parcs et prés
+    ctx.fillStyle = colors.plaza;
+    for (const p of city.plazas) ctx.fillRect(p.x, p.y, p.w, p.h);
+
+    this.drawRiver(ctx, city);
 
     // Bâtiments, colorés par type
     ctx.lineWidth = 1.5;
@@ -119,6 +121,46 @@ export class Renderer {
     }
 
     if (city.hospital) this.drawHospitalCross(ctx, city.hospital);
+  }
+
+  /** Rivière (tracé lisse : berge puis eau), tabliers et parapets des ponts. */
+  drawRiver(ctx, city) {
+    const river = city.river;
+    if (!river) return;
+    const colors = CONFIG.colors;
+    ctx.lineCap = 'butt';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    river.path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.strokeStyle = colors.riverBank;
+    ctx.lineWidth = river.width + 5;
+    ctx.stroke();
+    ctx.strokeStyle = colors.water;
+    ctx.lineWidth = river.width;
+    ctx.stroke();
+
+    // Tabliers : la chaussée passe par-dessus l'eau
+    ctx.fillStyle = colors.background;
+    for (const b of city.bridges) ctx.fillRect(b.x, b.y, b.w, b.h);
+
+    ctx.strokeStyle = colors.bridgeRail;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (const b of city.bridges) {
+      if (b.w > b.h) {
+        // Pont horizontal : parapets le long des bords haut et bas
+        ctx.moveTo(b.x, b.y + 1);
+        ctx.lineTo(b.x + b.w, b.y + 1);
+        ctx.moveTo(b.x, b.y + b.h - 1);
+        ctx.lineTo(b.x + b.w, b.y + b.h - 1);
+      } else {
+        ctx.moveTo(b.x + 1, b.y);
+        ctx.lineTo(b.x + 1, b.y + b.h);
+        ctx.moveTo(b.x + b.w - 1, b.y);
+        ctx.lineTo(b.x + b.w - 1, b.y + b.h);
+      }
+    }
+    ctx.stroke();
   }
 
   drawHospitalCross(ctx, h) {

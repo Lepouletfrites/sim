@@ -108,6 +108,11 @@ export class Citizen {
     this.target = null;     // zombie : humain pourchassé
     this.threat = null;     // humain : zombie qu'il fuit (ou attaque)
     this.musicVenue = -1;   // zombie : lieu bruyant qui l'attire
+    this.siegeTarget = -1;  // zombie : bâtiment occupé qu'il assiège
+    this.supplies = 0;      // h de vivres restantes (barricadé)
+    this.looting = false;   // part piller pour se nourrir
+    this.lootTarget = -1;
+    this.lootTimer = 0;
   }
 
   get alive() {

@@ -25,7 +25,7 @@ function formatValue(slider, value) {
   switch (slider.unit) {
     case '%': return `${value} %`;
     case 'h': return value === 0 ? 'immédiat' : `${value} h`;
-    case 'j': return value === 0 ? 'jamais' : `${value} j`;
+    case 'j': return value === 0 ? 'jamais' : `${value.toLocaleString('fr-FR')} j`;
     case 'n': return String(value);
     default: return `${value} ${slider.unit}`;
   }
@@ -47,7 +47,7 @@ export class ZombiePanel {
       hint: $('#legend-hint'),
       stats: {},
     };
-    for (const key of ['humans', 'zombies', 'bitten', 'lost', 'barricaded', 'fighters', 'destroyed', 'devoured', 'killed', 'cured']) {
+    for (const key of ['humans', 'zombies', 'bitten', 'lost', 'barricaded', 'looting', 'invaded', 'fighters', 'destroyed', 'devoured', 'killed', 'cured']) {
       this.el.stats[key] = $(`#zstat-${key}`);
     }
 
@@ -67,8 +67,8 @@ export class ZombiePanel {
     for (const slider of ZOMBIE_SLIDERS) {
       const input = $(`#zslider-${slider.key}`);
       const output = $(`#zvalue-${slider.key}`);
-      const { min, max, default: value } = cfg[slider.key];
-      Object.assign(input, { min, max, step: 1, value });
+      const { min, max, default: value, step = 1 } = cfg[slider.key];
+      Object.assign(input, { min, max, step, value });
       output.textContent = formatValue(slider, value);
       input.addEventListener('input', () => {
         const v = Number(input.value);
@@ -111,6 +111,8 @@ export class ZombiePanel {
     s.bitten.textContent = c.bitten;
     s.lost.textContent = c.devoured + c.killed;
     s.barricaded.textContent = c.barricaded;
+    s.looting.textContent = c.looting;
+    s.invaded.textContent = c.invaded;
     s.fighters.textContent = zombies.alarm ? c.fighters : '—';
     s.destroyed.textContent = c.destroyed;
     s.devoured.textContent = c.devoured;
@@ -144,8 +146,8 @@ export class ZombiePanel {
       } else if (zombies.alarm) {
         level = 'alarm';
         title = 'Alerte générale';
-        text = `${plural(c.zombies, 'zombie')}, ${plural(c.bitten, 'mordu')}, ` +
-          `${plural(c.barricaded, 'barricadé')}, remède à ${Math.round(zombies.cure * 100)} %.`;
+        text = `${plural(c.zombies, 'zombie')} (dont ${c.invaded} dans des bâtiments), ` +
+          `${plural(c.barricaded, 'barricadé')}, ${c.looting} en train de piller, remède à ${Math.round(zombies.cure * 100)} %.`;
       } else if (c.zombies > 0 || c.bitten > 0) {
         level = 'outbreak';
         title = 'Premiers cas';
@@ -170,7 +172,11 @@ export class ZombiePanel {
 
     const units = (kind, stock) => {
       const alive = r.alive(kind);
-      return { alive, text: `${alive}/${stock.sent} sur le terrain · ${plural(stock.kills, 'zombie')} neutralisé${stock.kills > 1 ? 's' : ''} · ${stock.lost} tombé${stock.lost > 1 ? 's' : ''}` };
+      return {
+        alive,
+        text: `${alive}/${stock.sent} sur le terrain · ${plural(stock.kills, 'zombie')} neutralisé${stock.kills > 1 ? 's' : ''}` +
+          ` · ${stock.lost} tombé${stock.lost > 1 ? 's' : ''} · ${stock.withdrawn} replié${stock.withdrawn > 1 ? 's' : ''} (munitions)`,
+      };
     };
 
     const rows = {

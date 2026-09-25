@@ -276,8 +276,8 @@ kbd {
 
 .legend-box__body {
   display: grid;
-  grid-template-columns: auto auto;
-  gap: 4px 24px;
+  grid-template-columns: repeat(3, auto);
+  gap: 4px 20px;
 }
 
 .legend-box h4 {
@@ -340,7 +340,7 @@ kbd {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -374,11 +374,61 @@ kbd {
 .tabpanel {
   display: grid;
   gap: 12px;
-  padding: 14px 12px 18px;
+  padding: 0 12px 18px;
 }
 
-.tabpanel[hidden] {
+.tabpanel[hidden],
+.subpanel[hidden] {
   display: none;
+}
+
+/* Tabpanel sans sous-onglets (Ville) */
+#tab-city {
+  padding-top: 14px;
+}
+
+/* Sous-onglets : restent visibles en haut pendant le défilement */
+.subtabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+  margin: 0 -12px;
+  padding: 10px 12px;
+  background: var(--bg-sidebar);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.subtabs__btn {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.subtabs__btn:hover {
+  color: var(--text);
+}
+
+.subtabs__btn[aria-selected="true"] {
+  color: var(--text);
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+.subpanel {
+  display: grid;
+  gap: 12px;
+}
+
+.meter--spaced {
+  margin-top: 14px;
 }
 
 .sidebar__footer {
@@ -648,6 +698,7 @@ input[type="range"] {
 
 /* Interrupteurs */
 .switch {
+  position: relative; /* la case cachée reste dans l'interrupteur (voir plus bas) */
   display: flex;
   align-items: center;
   gap: 10px;
@@ -660,8 +711,15 @@ input[type="range"] {
   border-top: 1px solid var(--border-soft);
 }
 
+/* Case à cocher invisible, posée sur le curseur visuel. Sans parent positionné,
+   elle partait hors de l'écran et le focus faisait défiler toute la page. */
 .switch input {
   position: absolute;
+  top: 50%;
+  left: 0;
+  width: 32px;
+  height: 18px;
+  margin: -9px 0 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -934,6 +992,40 @@ input[type="range"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Graine de la ville */
+.seed-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 8px;
+  font-size: 13px;
+}
+
+.seed-row input {
+  min-width: 0;
+  padding: 8px 10px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.seed-row input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.seed-row .btn {
+  padding: 8px 12px;
+}
+
+#tab-city .switch {
+  margin-top: 4px;
+}
+
 /* =============================== Zombies =============================== */
 
 .tabs__btn--zombie[aria-selected="true"] {
@@ -1114,6 +1206,10 @@ input[type="range"] {
   font-weight: 600;
 }
 
+.switch--inline input {
+  top: 50%;
+}
+
 .switch--inline .unit {
   margin-right: -2px;
 }
@@ -1208,6 +1304,11 @@ input[type="range"] {
   html,
   body {
     overflow: auto;
+  }
+
+  /* La barre de défilement ne doit pas changer la largeur de la carte */
+  html {
+    scrollbar-gutter: stable;
   }
 
   .app {

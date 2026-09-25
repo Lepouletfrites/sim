@@ -1,25 +1,32 @@
 # CitySim — Simulation urbaine 2D procédurale
 
-Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D), sans framework ni dépendance ni étape de build : une ville procédurale, ses habitants et leur vie quotidienne, et une épidémie qui s'y propage.
+Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D), sans framework ni dépendance ni étape de build : une ville procédurale, ses habitants et leur vie quotidienne, une épidémie et une apocalypse zombie.
 
 ## Interface
 
-- **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès).
-- **Carte** avec une légende repliable (habitants et types de bâtiments). Un clic infecte l'habitant le plus proche.
-- **Panneau latéral à trois onglets** (le dernier ouvert est mémorisé) :
-  - **Situation** : indicateurs, courbe de l'épidémie, état de santé, occupation de l'hôpital et soins, boutons d'action ;
-  - **Réglages** : virus (transmission, virulence), comportements (responsabilité, prudence, inquiétude), mesures sanitaires ;
-  - **Ville** : lieux et horaires, foyers de contamination, population, densité, régénération ;
-  - **Zombies** : le mode apocalypse (voir plus bas).
+- **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès, zombies).
+- **Carte** avec une légende repliable en trois colonnes (virus, zombies, bâtiments). L'action du clic se choisit dans l'onglet Zombies.
+- **Panneau latéral** : trois onglets, chacun découpé en sous-onglets courts (onglet et sous-onglets mémorisés) :
+
+| Onglet | Sous-onglets |
+|---|---|
+| **Virus** | **Suivi** : indicateurs, actions, courbe, état de santé, soins, lieux de contamination · **Réglages** : virus, comportements, mesures sanitaires |
+| **Zombies** | **Suivi** : état de l'apocalypse, actions et clic, courbe, survivants, remède, journal · **Riposte** : police, barricades de rue, armée · **Réglages** : morsure, zombies, humains, barricades et vivres, remède, règles farfelues |
+| **Ville** | Génération (population, densité, désordre, espaces verts, rivière, graine), lieux et horaires |
+
 - Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter).
 
 ## Fonctionnalités
 
 ### Ville et physique
-- Ville procédurale déterministe (graine) : îlots séparés par des avenues, subdivisés en BSP avec des ruelles.
+- Ville procédurale déterministe (graine) : îlots séparés par des avenues, subdivisés en BSP avec des ruelles. La graine peut être saisie pour rejouer une ville précise.
 - **Densité urbaine** (1 à 10) : à 1, un village avec peu de petits bâtiments espacés au milieu des prés ; à 10, un centre-ville de bâtiments mitoyens. Sur une carte de 1150 × 850 : 43 bâtiments (4 % du sol bâti) à 1, 117 (14 %) à 5, 196 (32 %) à 10.
+- **Désordre** (0 à 100 %) : îlots de tailles inégales, avenues de largeurs variables et boulevards, îlots fusionnés qui brisent la grille, découpes moins régulières, bâtiments accolés de profondeurs différentes.
+- **Espaces verts** (0 à 100 %) : jardins, et îlots entiers transformés en parcs.
+- **Rivière** : elle serpente à travers la ville (méandres plus marqués avec le désordre) et ne se franchit que par quelques ponts, ce qui crée des quartiers et des goulets d'étranglement. L'eau est un obstacle pour tout le monde.
+- Les curseurs de forme s'appliquent au relâchement et gardent la même graine, pour voir leur effet sur la même ville.
 - 100 à 1 500 habitants. Collision cercle/rectangle avec glissement le long des murs, séparation entre voisins, croisement par la droite.
-- Contrôles : Pause, x1, x5, x10, x25, x50 (clavier : `Espace`, `1` à `5`), population, densité urbaine, régénération.
+- Contrôles : Pause, x1 (vitesse au démarrage), x5, x10, x25, x50 (clavier : `Espace`, `1` à `5`).
 
 ### Temps et lieux
 Une horloge fait défiler les jours de la semaine (1 h de jeu = 8 s à x1, 1 jour ≈ 19 s à x10) avec un cycle jour/nuit.
@@ -76,13 +83,15 @@ Un second fléau, indépendant de l'épidémie, sur la même population.
 
 Humain → **morsure** → Mordu (garde sa vie normale pendant le délai de transformation) → **Zombie** → neutralisé (combat, décomposition, frappe) ou **guéri** par le remède. Une morsure peut aussi tuer : la victime est dévorée.
 
-- **Chasse** : les zombies flairent l'humain le plus proche dans la rue et le poursuivent. Sans proie, ils rôdent et **assiègent les bâtiments occupés** jusqu'à enfoncer les barricades.
-- **Surprise puis alerte** : avant l'alerte générale (3 zombies), personne ne réagit. Ensuite, les humains fuient en courant, les **survivalistes** (les plus braves) chassent les zombies, les plus prudents se **barricadent** chez eux et tout le monde limite ses sorties.
-- **Foyers** : un mordu qui se transforme à l'intérieur (chez lui, au bureau, au centre commercial) mord une partie des occupants avant de sortir.
+- **Chasse** : les zombies flairent l'humain le plus proche dans la rue et le poursuivent.
+- **Siège et invasion des bâtiments** : sans proie dans la rue, les zombies flairent les humains cachés dans les bâtiments et les assiègent. Chaque zombie collé aux murs use les portes (plus ils sont nombreux, plus ça va vite : environ 5 h de siège pour 5 zombies avec la solidité par défaut). Une fois l'entrée forcée, **ils entrent** et se battent dans les pièces. Ils ressortent quand il n'y a plus personne, et les portes sont rebarricadées quelques heures plus tard.
+- **Surprise puis alerte** : avant l'alerte générale (5 zombies), personne ne réagit et même les survivalistes sont pris de court. Ensuite, les humains fuient en courant, les **survivalistes** (les plus braves) chassent les zombies, les plus prudents se **barricadent** chez eux et tout le monde limite ses sorties. Retranché chez soi, on se défend 2,5 fois mieux.
+- **Vivres et pillage** : un foyer barricadé a des réserves pour environ 1,5 jour (réglable). Une fois épuisées, ses membres sortent **piller le centre commercial** (à défaut un restaurant), puis rentrent se barricader. C'est à ce moment qu'ils sont les plus exposés.
+- **Foyers** : un mordu qui se transforme à l'intérieur (chez lui, au bureau, au centre commercial) reste dans la pièce, au milieu des occupants.
 - **Remède** : la recherche démarre à l'alerte, et avance d'autant plus vite qu'il reste d'humains. Une fois prêt, les mordus sont soignés et les zombies redeviennent humains peu à peu.
 - **Règles farfelues** : zombies qui craignent le soleil (léthargiques le jour, déchaînés la nuit), attirés par la musique (boîtes et centre commercial ouverts), hôpital-forteresse.
 - **Clic sur la carte** : infecter (virus), transformer en zombie, ou **frappe aérienne** (tout ce qui est dans la rue dans le rayon, humains compris ; les bâtiments protègent).
-- **Journal de l'apocalypse** : premier cas, foyers, barricades enfoncées, paliers, riposte, remède, fin de l'alerte.
+- **Journal de l'apocalypse** : premier cas, foyers, entrées forcées, pillages, paliers, riposte, munitions, remède, fin de l'alerte.
 
 #### Riposte par paliers
 
@@ -90,15 +99,21 @@ Chaque force entre en jeu quand la **part de la population transformée** attein
 
 | Palier | Seuil par défaut | Effet |
 |---|---|---|
-| **Police** | 1 % | 8 agents partent du **commissariat** (marqué POLICE sur la carte), rejoignent les zombies par les rues et tirent à 45 px, avec ligne de vue. Vulnérables aux morsures. |
+| **Police** | 2 % | 6 agents partent du **commissariat** (marqué POLICE sur la carte), rejoignent les zombies par les rues et tirent à 42 px, avec ligne de vue. 55 % de précision, 16 cartouches chacun. Vulnérables aux morsures. |
 | **Barricades de rue** | 10 % | Les habitants barrent 12 rues étroites au contact du front, là où il y a le plus de monde à protéger. Seuls les zombies sont bloqués ; ils usent les barricades jusqu'à les faire céder. Reconstruites toutes les 12 h tant que la menace dure. |
-| **Armée** | 25 % | 30 soldats entrent par le **bord de la carte le plus proche du gros de l'invasion**, sur deux rangs. Portée 75 px, cadence ×1,8, blindage (morsures ×0,3). |
+| **Armée** | 30 % | 24 soldats entrent par le **bord de la carte le plus proche du gros de l'invasion**, sur deux rangs. Portée 60 px, 60 % de précision, 36 cartouches chacun, morsures ×0,55 grâce à l'équipement. |
 
-Quand il n'y a plus ni zombie ni mordu, les forces se retirent et les barricades sont démontées ; une nouvelle vague relance la riposte. Les unités trouvent les zombies grâce à une carte des distances aux zombies (un seul BFS par tick pour toutes les unités).
+Police et armée **reculent** quand un zombie s'approche trop, ne tirent que sur les zombies dans la rue, et **se replient à court de munitions**. Quand il n'y a plus ni zombie ni mordu, les forces se retirent et les barricades sont démontées ; une nouvelle vague relance la riposte. Les unités trouvent les zombies grâce à une carte des distances aux zombies (un seul BFS par tick pour toutes les unités).
 
-Réglages : contagiosité de la morsure, délai de transformation, vitesse et flair des zombies, décomposition, combativité, part de survivalistes, réflexe barricade, solidité des barricades, vitesse de la recherche.
+Réglages : contagiosité de la morsure, délai de transformation, vitesse et flair des zombies, décomposition, combativité, part de survivalistes, réflexe barricade, solidité des portes, réserves de vivres, vitesse de la recherche.
 
-Avec les réglages par défaut (600 habitants, un patient zéro), une partie typique est une course contre la montre. Au jour 2, il ne reste que 178 humains face à 225 zombies ; le remède arrive dans l'après-midi, et la ville se relève avec 293 survivants et 85 pertes.
+Avec les réglages par défaut (600 habitants, un patient zéro), trois villes différentes ont donné trois histoires différentes :
+
+| Ville | Déroulement | Survivants |
+|---|---|---|
+| 1 | La ville vacille pendant 3 jours ; l'armée arrive au jour 4 et nettoie tout | 60 |
+| 2 | La police contient l'invasion dès le premier jour | 474 |
+| 3 | Guerre d'usure avec des pillages ; le remède arrive au jour 4 | 368 |
 
 ### Pourquoi ce modèle de transmission
 

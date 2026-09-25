@@ -39,8 +39,8 @@ export class Response {
     this.units = [];
     this.walls = [];
     this.tracers = [];
-    this.police = { deployed: false, sent: 0, lost: 0, kills: 0 };
-    this.army = { deployed: false, sent: 0, lost: 0, kills: 0, edge: null };
+    this.police = { deployed: false, sent: 0, lost: 0, kills: 0, withdrawn: 0 };
+    this.army = { deployed: false, sent: 0, lost: 0, kills: 0, withdrawn: 0, edge: null };
     this.wallState = { deployed: false, built: 0, broken: 0, nextRebuild: 0 };
   }
 
@@ -90,7 +90,7 @@ export class Response {
     const list = this.zombieList;
     list.length = 0;
     for (const c of this.population.citizens) {
-      if (c.alive && c.zombie === ZombieState.ZOMBIE) list.push(c);
+      if (c.alive && c.zombie === ZombieState.ZOMBIE && c.place < 0) list.push(c); // on ne voit que la rue
     }
   }
 
@@ -104,19 +104,29 @@ export class Response {
       u.target = this.nearestZombie(u, spec.range, true);
       u.chase = u.target ?? this.nearestZombie(u, 160, false);
 
-      // Tir
+      // Tir : tous ne touchent pas, et les munitions s'épuisent.
       if (u.target && this.rng.chance(1 - Math.exp(-spec.fireRate * dt))) {
+        u.ammo--;
         this.tracers.push({ x1: u.x, y1: u.y, x2: u.target.x, y2: u.target.y, kind: u.kind, start: performance.now() });
-        this.zombies.destroy(u.target);
-        this[u.kind].kills++;
-        u.target = null;
+        if (this.rng.chance(spec.accuracy)) {
+          this.zombies.destroy(u.target);
+          this[u.kind].kills++;
+          u.target = null;
+        }
+        if (u.ammo <= 0) {
+          u.dead = true; // à court de munitions : l'unité se replie
+          this[u.kind].withdrawn++;
+          this.zombies.logThrottled(`ammo-${u.kind}`, 6,
+            `À court de munitions, des ${UNIT_NAME[u.kind]}s se replient.`, 'bad');
+          continue;
+        }
       }
 
       // Morsures au corps à corps (le blindage de l'armée protège)
       const count = grid.query(u.x, u.y, this.buffer);
       for (let k = 0; k < count; k++) {
         const z = citizens[this.buffer[k]];
-        if (!z || !z.alive || z.zombie !== ZombieState.ZOMBIE) continue;
+        if (!z || !z.alive || z.zombie !== ZombieState.ZOMBIE || z.place >= 0) continue;
         const reach = z.radius + u.radius + cfg.contactExtra;
         if ((z.x - u.x) ** 2 + (z.y - u.y) ** 2 > reach * reach) continue;
         if (this.rng.chance(1 - Math.exp(-cfg.biteRate * spec.armor * dt))) {
@@ -138,7 +148,7 @@ export class Response {
     let bestD2 = range * range;
     for (let k = 0; k < count; k++) {
       const z = citizens[this.buffer[k]];
-      if (!z || !z.alive || z.zombie !== ZombieState.ZOMBIE) continue;
+      if (!z || !z.alive || z.zombie !== ZombieState.ZOMBIE || z.place >= 0) continue;
       const d2 = (z.x - u.x) ** 2 + (z.y - u.y) ** 2;
       if (d2 >= bestD2) continue;
       if (needSight && !this.lineOfSight(u.x, u.y, z.x, z.y)) continue;
@@ -175,8 +185,14 @@ export class Response {
       let speed = spec.speed;
 
       const t = u.target;
-      if (t && t.alive && t.zombie === ZombieState.ZOMBIE && (t.x - u.x) ** 2 + (t.y - u.y) ** 2 < (spec.range * 0.75) ** 2) {
-        speed = 0; // à portée : on s'arrête pour tirer
+      const d2 = t ? (t.x - u.x) ** 2 + (t.y - u.y) ** 2 : Infinity;
+      if (t && t.alive && t.zombie === ZombieState.ZOMBIE && d2 < (spec.range * 0.45) ** 2) {
+        // Trop près : on recule en continuant de faire face.
+        const d = Math.sqrt(d2) || 1;
+        u.dirX = (u.x - t.x) / d;
+        u.dirY = (u.y - t.y) / d;
+      } else if (t && t.alive && t.zombie === ZombieState.ZOMBIE && d2 < (spec.range * 0.8) ** 2) {
+        speed = 0; // à bonne distance : on s'arrête pour tirer
       } else if (!this.field.steer(u)) {
         const c = u.chase;
         if (c && c.alive && c.zombie === ZombieState.ZOMBIE) {
@@ -249,7 +265,7 @@ export class Response {
     const spec = CONFIG.zombie[kind];
     this.units.push({
       kind, x, y, px: x, py: y, vx: 0, vy: 0, dirX: 0, dirY: 0,
-      radius: spec.radius, target: null, chase: null, dead: false,
+      radius: spec.radius, target: null, chase: null, dead: false, ammo: spec.ammo,
     });
     this[kind].sent++;
   }

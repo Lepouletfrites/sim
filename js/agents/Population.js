@@ -62,7 +62,7 @@ export class Population {
   step(dt) {
     const cfg = CONFIG.citizens;
     const { indoorSpeedFactor, indoorPause } = CONFIG.routine;
-    const { panicBoost } = CONFIG.zombie;
+    const { panicBoost, indoorChase } = CONFIG.zombie;
     const citizens = this.citizens;
     const n = citizens.length;
     const grid = this.grid;
@@ -85,8 +85,11 @@ export class Population {
 
       let speed = c.speed * c.speedFactor;
       if (c.place >= 0) {
-        // Flânerie intérieure : aller à un point, s'y arrêter, repartir.
-        if (c.pause > 0) {
+        if (this.zombies !== null && this.zombies.steer(c)) {
+          // Zombie qui traque dans la pièce, ou humain qui s'enfuit / se défend.
+          speed *= c.zombie === ZombieState.ZOMBIE ? indoorChase : indoorSpeedFactor * 3;
+        } else if (c.pause > 0) {
+          // Flânerie intérieure : aller à un point, s'y arrêter, repartir.
           c.pause -= dt;
           speed = 0;
         } else {
