@@ -96,6 +96,18 @@ export class Citizen {
     this.pendingDecision = false;
     this.hesitation = 0;
     this.masked = false;
+
+    // Mode zombie (voir Zombies.js)
+    this.zombie = 0;        // ZombieState
+    this.bravery = 0;       // les plus braves deviennent survivalistes
+    this.fighter = false;
+    this.barricaded = false;
+    this.biteTimer = 0;     // h avant transformation
+    this.zombieAge = 0;     // h depuis la transformation
+    this.rotFactor = 1;
+    this.target = null;     // zombie : humain pourchassé
+    this.threat = null;     // humain : zombie qu'il fuit (ou attaque)
+    this.musicVenue = -1;   // zombie : lieu bruyant qui l'attire
   }
 
   get alive() {

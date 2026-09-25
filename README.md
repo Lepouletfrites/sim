@@ -9,7 +9,8 @@ Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D)
 - **Panneau latéral à trois onglets** (le dernier ouvert est mémorisé) :
   - **Situation** : indicateurs, courbe de l'épidémie, état de santé, occupation de l'hôpital et soins, boutons d'action ;
   - **Réglages** : virus (transmission, virulence), comportements (responsabilité, prudence, inquiétude), mesures sanitaires ;
-  - **Ville** : lieux et horaires, foyers de contamination, population, densité, régénération.
+  - **Ville** : lieux et horaires, foyers de contamination, population, densité, régénération ;
+  - **Zombies** : le mode apocalypse (voir plus bas).
 - Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter).
 
 ## Fonctionnalités
@@ -68,6 +69,24 @@ Effet de la virulence (600 habitants, 10 cas index, autres réglages par défaut
 | 10 % | 480 | 2 | 0,4 % | 12 / 40 | 0 |
 | 50 % | 462 | 44 | 9,5 % | 40 / 40 (saturé) | 18 |
 | 100 % | 480 | 147 | 31 % | 40 / 40 (saturé) | 36 |
+
+### Mode zombie
+
+Un second fléau, indépendant de l'épidémie, sur la même population.
+
+Humain → **morsure** → Mordu (garde sa vie normale pendant le délai de transformation) → **Zombie** → neutralisé (combat, décomposition, frappe) ou **guéri** par le remède. Une morsure peut aussi tuer : la victime est dévorée.
+
+- **Chasse** : les zombies flairent l'humain le plus proche dans la rue et le poursuivent. Sans proie, ils rôdent et **assiègent les bâtiments occupés** jusqu'à enfoncer les barricades.
+- **Surprise puis alerte** : avant l'alerte générale (3 zombies), personne ne réagit. Ensuite, les humains fuient en courant, les **survivalistes** (les plus braves) chassent les zombies, les plus prudents se **barricadent** chez eux et tout le monde limite ses sorties.
+- **Foyers** : un mordu qui se transforme à l'intérieur (chez lui, au bureau, au centre commercial) mord une partie des occupants avant de sortir.
+- **Remède** : la recherche démarre à l'alerte, et avance d'autant plus vite qu'il reste d'humains. Une fois prêt, les mordus sont soignés et les zombies redeviennent humains peu à peu.
+- **Règles farfelues** : zombies qui craignent le soleil (léthargiques le jour, déchaînés la nuit), attirés par la musique (boîtes et centre commercial ouverts), hôpital-forteresse.
+- **Clic sur la carte** : infecter (virus), transformer en zombie, ou **frappe aérienne** (tout ce qui est dans la rue dans le rayon, humains compris ; les bâtiments protègent).
+- **Journal de l'apocalypse** : premier cas, foyers, barricades enfoncées, paliers, remède, fin de l'alerte.
+
+Réglages : contagiosité de la morsure, délai de transformation, vitesse et flair des zombies, décomposition, combativité, part de survivalistes, réflexe barricade, solidité des barricades, vitesse de la recherche.
+
+Avec les réglages par défaut (600 habitants, un patient zéro), une partie typique est une course contre la montre. Au jour 2, il ne reste que 178 humains face à 225 zombies ; le remède arrive dans l'après-midi, et la ville se relève avec 293 survivants et 85 pertes.
 
 ### Pourquoi ce modèle de transmission
 
@@ -135,12 +154,15 @@ js/
 │   └── Population.js       Pas physique, dehors et dedans
 ├── epidemic/
 │   └── Epidemic.js         Contagion par lieu, gravité, décès, soins, comportements
+├── zombie/
+│   └── Zombies.js          Apocalypse : chasse, combats, barricades, foyers, remède, journal
 ├── physics/
 │   └── Collision.js        Collision cercle/rectangle avec glissement
 ├── render/
 │   └── Renderer.js         Calque statique, jour/nuit, lieux fermés, agents
 └── ui/
     ├── UI.js               Barre d'outils, onglets, légende et raccourcis clavier
+    ├── ZombiePanel.js      Onglet Zombies
     └── EpidemicChart.js    Courbe de l'épidémie (aire empilée)
 ```
 

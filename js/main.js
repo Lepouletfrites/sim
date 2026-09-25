@@ -42,12 +42,30 @@ const ui = new UI({
     if (simulation.epidemic) simulation.epidemic.reset();
     refreshStats();
   },
+  onZombieSetting: (name, value) => simulation.setZombieSetting(name, value),
+  onReleaseZombie: () => zombieAction((z) => z.releaseZombie()),
+  onHorde: () => zombieAction((z) => z.releaseHorde(10)),
+  onResetZombies: () => zombieAction((z) => z.reset()),
 });
 
-// Clic sur la carte : infecte l'habitant sain le plus proche.
+function zombieAction(action) {
+  if (!simulation.zombies) return;
+  action(simulation.zombies);
+  refreshStats();
+}
+
+// Clic sur la carte : selon le mode choisi dans l'onglet Zombies.
 canvas.addEventListener('click', (event) => {
-  if (simulation.epidemic && simulation.epidemic.infectAt(event.offsetX, event.offsetY, 30)) {
-    refreshStats();
+  const { offsetX: x, offsetY: y } = event;
+  switch (ui.clickMode) {
+    case 'zombie':
+      zombieAction((z) => z.zombieAt(x, y, 30));
+      break;
+    case 'strike':
+      zombieAction((z) => z.airStrike(x, y));
+      break;
+    default:
+      if (simulation.epidemic && simulation.epidemic.infectAt(x, y, 30)) refreshStats();
   }
 });
 

@@ -182,6 +182,45 @@ export const CONFIG = {
     maxSamples: 300,          // au-delà, l'historique est sous-échantillonné
   },
 
+  /** Mode zombie : indépendant de l'épidémie, sur la même population. */
+  zombie: {
+    // Curseurs
+    biteInfect: { min: 0, max: 100, default: 70 },      // % : la morsure transforme (sinon la victime est dévorée)
+    turnDelay: { min: 0, max: 48, default: 6 },         // h entre morsure et transformation (0 = immédiat)
+    speed: { min: 30, max: 150, default: 60 },          // % de la vitesse humaine (30 = Romero, 150 = sprinteurs)
+    smell: { min: 30, max: 200, default: 90 },          // px : portée du flair
+    lifespan: { min: 0, max: 30, default: 12 },         // jours avant décomposition (0 = immortels)
+    defense: { min: 0, max: 100, default: 35 },         // % : capacité des humains à se défendre
+    fighters: { min: 0, max: 100, default: 15 },        // % de survivalistes qui attaquent au lieu de fuir
+    barricade: { min: 0, max: 100, default: 60 },       // % qui se barricadent chez eux à l'alerte
+    barricadeStrength: { min: 0, max: 100, default: 75 }, // % : solidité des barricades
+    research: { min: 0, max: 100, default: 50 },        // % : vitesse de la recherche du remède
+    // Interrupteurs par défaut
+    sunFear: false,           // léthargiques le jour, déchaînés la nuit
+    music: false,             // attirés par les lieux bruyants ouverts
+    fortressHospital: true,   // l'hôpital ne peut pas être envahi
+
+    // Constantes du modèle
+    fearRadius: 70,           // px : un humain voit un zombie et s'enfuit
+    contactExtra: 6,          // px ajoutés aux rayons pour qu'un contact compte
+    biteRate: 1.2,            // morsures / s de contact
+    defenseRate: 1,           // zombies neutralisés / s de contact (défense 100 %, × profil)
+    fighterDefense: 2.5,      // multiplicateur de défense d'un survivaliste
+    civilianDefense: 0.4,     // ... d'un civil qui se débat
+    panicBoost: 1.35,         // vitesse d'un humain qui fuit
+    breachRate: 0.15,         // barricades enfoncées / h par zombie collé au mur (solidité 0 %)
+    indoorOutbreak: 0.35,      // chance de mordre chaque occupant quand on se transforme à l'intérieur
+    alarmThreshold: 3,        // zombies avant l'alerte générale
+    alarmLeisure: 0.25,       // pendant l'alerte, on ne sort presque plus pour ses loisirs
+    researchRate: 0.08,       // progression / h du remède (recherche 100 %, population intacte)
+    cureRate: 0.3,            // chance / h qu'un zombie soit guéri une fois le remède prêt
+    strikeRadius: 45,         // px : rayon d'une frappe aérienne
+    markLife: 12,             // h d'affichage des traces
+    sampleInterval: 1,        // h entre deux points de la courbe
+    maxSamples: 300,
+    maxEvents: 40,
+  },
+
   navigation: {
     cellSize: 8,              // grille des champs de flux
     clearance: 4,             // rayon libre exigé pour qu'une case soit praticable
@@ -200,6 +239,12 @@ export const CONFIG = {
     homeLight: 'rgba(241, 196, 15, ALPHA)', // fenêtres éclairées la nuit
     // Indexé par Health : sain, porteur, malade, guéri, décédé
     health: ['#3498db', '#f39c12', '#e74c3c', '#8e9aa6', '#9b59b6'],
+    zombie: '#7bd13a',
+    zombieStroke: '#23400c',
+    bittenRing: '#b4e05a',    // mordu (se transformera bientôt)
+    fighterRing: '#ff9f43',   // survivaliste
+    humanLoss: '#8e1b1b',     // humains dévorés ou tués
+    strike: '#ffb142',
     hospitalRing: '#ffffff',  // en route vers l'hôpital
     homeRing: '#f1c40f',      // rentre s'isoler / se confiner
     hospitalCross: '#ecf0f1',

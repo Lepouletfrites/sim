@@ -1,6 +1,7 @@
 import { CONFIG } from '../config.js';
 import { Health, Care } from '../agents/Citizen.js';
 import { PlaceType, MAP_LABELS, isOpen } from '../world/PlaceTypes.js';
+import { ZombieState } from '../zombie/Zombies.js';
 
 const TAU = Math.PI * 2;
 const HEALTH_DRAW_ORDER = [Health.SUSCEPTIBLE, Health.RECOVERED, Health.INCUBATING, Health.SYMPTOMATIC];
@@ -173,7 +174,7 @@ export class Renderer {
       ctx.beginPath();
       for (let i = 0; i < citizens.length; i++) {
         const c = citizens[i];
-        if (c.health !== health) continue;
+        if (c.health !== health || c.zombie === ZombieState.ZOMBIE) continue;
         const x = c.px + (c.x - c.px) * alpha;
         const y = c.py + (c.y - c.py) * alpha;
         ctx.moveTo(x + c.radius, y);
@@ -189,6 +190,78 @@ export class Renderer {
       (c) => c.care === Care.QUARANTINE || c.care === Care.BEDRIDDEN || c.care === Care.CONFINED,
       colors.homeRing,
     );
+
+    if (simulation.zombies && simulation.zombies.active) this.drawZombies(ctx, citizens, alpha, simulation.zombies);
+  }
+
+  /** Apocalypse : traces, zombies, mordus, survivalistes et frappes aériennes. */
+  drawZombies(ctx, citizens, alpha, zombies) {
+    const colors = CONFIG.colors;
+
+    // Traces : vert pour un zombie neutralisé, rouge sombre pour un humain tué
+    const life = CONFIG.zombie.markLife;
+    for (const m of zombies.marks) {
+      ctx.globalAlpha = 0.8 * (1 - m.age / life);
+      ctx.fillStyle = m.kind === 'zombie' ? colors.zombieStroke : colors.humanLoss;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, 4.5, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Zombies : un peu plus gros, cerclés de sombre
+    ctx.fillStyle = colors.zombie;
+    ctx.strokeStyle = colors.zombieStroke;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (let i = 0; i < citizens.length; i++) {
+      const c = citizens[i];
+      if (c.zombie !== ZombieState.ZOMBIE || !c.alive) continue;
+      const x = c.px + (c.x - c.px) * alpha;
+      const y = c.py + (c.y - c.py) * alpha;
+      const r = c.radius + 0.6;
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.fill();
+    ctx.stroke();
+
+    // Mordus (partout, même à l'intérieur) et survivalistes pendant l'alerte
+    this.drawRingsWhere(ctx, citizens, alpha, (c) => c.zombie === ZombieState.BITTEN, colors.bittenRing);
+    if (zombies.alarm) {
+      this.drawRings(ctx, citizens, alpha, (c) => c.fighter && c.zombie === ZombieState.HUMAN, colors.fighterRing);
+    }
+
+    // Frappes aériennes : onde de choc (temps réel, visible même en pause)
+    const now = performance.now();
+    const duration = 900;
+    zombies.effects = zombies.effects.filter((e) => now - e.start < duration);
+    for (const e of zombies.effects) {
+      const t = (now - e.start) / duration;
+      ctx.globalAlpha = 1 - t;
+      ctx.fillStyle = colors.strike;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r * (0.4 + 0.6 * t), 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** Comme drawRings, mais aussi pour les habitants à l'intérieur des bâtiments. */
+  drawRingsWhere(ctx, citizens, alpha, predicate, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let i = 0; i < citizens.length; i++) {
+      const c = citizens[i];
+      if (!c.alive || !predicate(c)) continue;
+      const x = c.px + (c.x - c.px) * alpha;
+      const y = c.py + (c.y - c.py) * alpha;
+      const r = c.radius + 1.8;
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, TAU);
+    }
+    ctx.stroke();
   }
 
   /** Anneau autour des habitants dans la rue qui répondent au prédicat. */

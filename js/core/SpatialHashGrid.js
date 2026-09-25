@@ -66,4 +66,29 @@ export class SpatialHashGrid {
     }
     return count;
   }
+
+  /**
+   * Comme `query`, mais sur toutes les cases qui recouvrent le disque (x, y, r) :
+   * pour les recherches à longue portée (flair des zombies).
+   */
+  queryRadius(x, y, r, out) {
+    const x0 = this.cellX(x - r);
+    const x1 = this.cellX(x + r);
+    const y0 = this.cellY(y - r);
+    const y1 = this.cellY(y + r);
+    const max = out.length;
+    let count = 0;
+
+    for (let gy = y0; gy <= y1; gy++) {
+      const row = gy * this.cols;
+      for (let gx = x0; gx <= x1; gx++) {
+        let i = this.head[row + gx];
+        while (i !== -1 && count < max) {
+          out[count++] = i;
+          i = this.next[i];
+        }
+      }
+    }
+    return count;
+  }
 }

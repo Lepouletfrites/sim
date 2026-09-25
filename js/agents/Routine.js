@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { Random } from '../core/Random.js';
 import { PlaceType, isOpen } from '../world/PlaceTypes.js';
 import { Care, Health } from './Citizen.js';
+import { ZombieState } from '../zombie/Zombies.js';
 
 /**
  * Emploi du temps des habitants (décisions lentes, 4 fois par seconde simulée).
@@ -22,6 +23,7 @@ export class Routine {
     this.settings = settings;
     this.rng = new Random(seed ^ 0x68e31da4);
     this.awareness = 0;       // tenu à jour par l'Epidemic
+    this.zombieAlarm = false; // tenu à jour par Zombies
     this.onEnter = null;      // callback (citoyen, bâtiment) à l'entrée d'un bâtiment
     this.onRefused = null;    // callback (citoyen, bâtiment) -> true si le refus est pris en charge
     this.occupancy = new Uint16Array(city.buildings.length);
@@ -53,7 +55,7 @@ export class Routine {
     this.recountOccupancy();
 
     for (const c of this.population.citizens) {
-      if (!c.alive) continue;
+      if (!c.alive || c.zombie === ZombieState.ZOMBIE) continue; // un zombie n'a plus d'emploi du temps
 
       if (c.place >= 0) {
         const type = city.buildings[c.place].type;
@@ -107,9 +109,15 @@ export class Routine {
       default:
     }
 
+    // Apocalypse : barricadé chez soi jusqu'à la fin de l'alerte.
+    if (c.barricaded) return { building: c.home, until: Infinity, activity: 'barricaded' };
+
     // Envie de sortir : freinée par la prudence face à l'inquiétude, et par la maladie.
     const sick = c.health === Health.SYMPTOMATIC;
-    const mood = (1 - s.prudence * this.awareness * c.caution) * (sick ? cfg.sickLeisureFactor : 1);
+    const mood =
+      (1 - s.prudence * this.awareness * c.caution) *
+      (sick ? cfg.sickLeisureFactor : 1) *
+      (this.zombieAlarm ? CONFIG.zombie.alarmLeisure : 1);
 
     // 2. Nuit : dormir, ou sortir en boîte pour les couche-tard
     if (!this.isAwake(c, h)) {

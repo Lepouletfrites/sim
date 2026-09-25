@@ -192,6 +192,25 @@ kbd {
   --mark: #9b59b6;
 }
 
+.mini--zombie {
+  --mark: #7bd13a;
+}
+
+.mini--zombie b::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  background: var(--mark);
+}
+
+.mini[hidden] {
+  display: none;
+}
+
 /* ================================ Carte ================================ */
 
 .map {
@@ -321,7 +340,7 @@ kbd {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -765,7 +784,7 @@ input[type="range"] {
   position: relative;
 }
 
-#epidemic-chart {
+.chart canvas {
   display: block;
   width: 100%;
   height: 120px;
@@ -913,6 +932,151 @@ input[type="range"] {
   text-align: right;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+/* =============================== Zombies =============================== */
+
+.tabs__btn--zombie[aria-selected="true"] {
+  border-bottom-color: #7bd13a;
+}
+
+.dot--zombie {
+  background: #7bd13a;
+  box-shadow: 0 0 0 1.5px #23400c;
+}
+
+.meter__fill--cure {
+  background: #7bd13a;
+}
+
+.btn--zombie {
+  color: #10200a;
+  border-color: #7bd13a;
+  background: #7bd13a;
+}
+
+.btn--zombie:hover {
+  background: #8fe04d;
+  border-color: #8fe04d;
+}
+
+/* Bandeau d'état de l'apocalypse */
+.status {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  border-left: 4px solid var(--status-color, var(--border));
+  background: var(--bg-card);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.status strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.status[data-level="calm"] { --status-color: #3a4048; }
+.status[data-level="outbreak"] { --status-color: #f1c40f; }
+.status[data-level="alarm"] { --status-color: #e74c3c; }
+.status[data-level="cure"] { --status-color: #3498db; }
+.status[data-level="freed"] { --status-color: #7bd13a; }
+.status[data-level="fallen"] { --status-color: #8e1b1b; }
+
+/* Choix exclusif (action du clic) */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  gap: 2px;
+  border-radius: 8px;
+  background: var(--bg-app);
+  border: 1px solid var(--border);
+}
+
+.segmented button {
+  padding: 7px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  color: var(--text);
+}
+
+.segmented button[aria-checked="true"] {
+  color: var(--text);
+  background: var(--bg-hover);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.control__row--spaced {
+  margin: 14px 0 6px;
+  font-size: 13px;
+}
+
+.control--after-meter {
+  margin-top: 14px;
+}
+
+.rows--spaced {
+  margin-top: 12px;
+}
+
+/* Journal */
+.log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 12px;
+}
+
+.log li {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 8px;
+  padding-left: 8px;
+  border-left: 2px solid var(--log-color, var(--border));
+  line-height: 1.4;
+}
+
+.log time {
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.log li[data-kind="zombie"] { --log-color: #7bd13a; }
+.log li[data-kind="bad"] { --log-color: #e74c3c; }
+.log li[data-kind="good"] { --log-color: #3498db; }
+
+.log .log__empty {
+  display: block;
+  border-left: none;
+  padding-left: 0;
+  color: var(--text-faint);
+}
+
+.switch {
+  flex-wrap: wrap;
+}
+
+.switch__help {
+  flex-basis: 100%;
+  padding-left: 42px;
+  margin-top: -2px;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 /* ============================== Responsive ============================== */

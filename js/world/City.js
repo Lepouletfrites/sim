@@ -111,6 +111,7 @@ export class City {
     this.byType = {};
     for (const type of Object.values(PlaceType)) this.byType[type] = [];
     this.buildings.forEach((b, i) => {
+      b.index = i;
       // Logements et bureaux accueillent toujours leurs occupants attitrés ;
       // seuls les lieux ouverts au public ont une jauge.
       b.capacity =

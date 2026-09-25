@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { Random } from '../core/Random.js';
 import { Health, Care } from '../agents/Citizen.js';
 import { PlaceType, STREET } from '../world/PlaceTypes.js';
+import { ZombieState } from '../zombie/Zombies.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -115,7 +116,9 @@ export class Epidemic {
   }
 
   infectRandom() {
-    const candidates = this.population.citizens.filter((c) => c.health === Health.SUSCEPTIBLE);
+    const candidates = this.population.citizens.filter(
+      (c) => c.health === Health.SUSCEPTIBLE && c.zombie < ZombieState.ZOMBIE,
+    );
     if (candidates.length === 0) return false;
     return this.infectIndexCase(this.rng.pick(candidates));
   }
@@ -125,7 +128,7 @@ export class Epidemic {
     let best = null;
     let bestD2 = maxDistance * maxDistance;
     for (const c of this.population.citizens) {
-      if (c.health !== Health.SUSCEPTIBLE) continue;
+      if (c.health !== Health.SUSCEPTIBLE || c.zombie >= ZombieState.ZOMBIE) continue;
       const d2 = (c.x - x) ** 2 + (c.y - y) ** 2;
       if (d2 < bestD2) {
         bestD2 = d2;
@@ -201,7 +204,7 @@ export class Epidemic {
       : cfg.hospitalCapacity - this.counts.hospitalized - this.counts.toHospital;
 
     for (const c of this.population.citizens) {
-      if (!c.alive) continue;
+      if (!c.alive || c.zombie >= ZombieState.ZOMBIE) continue;
       c.extraSpace = spacing * c.caution;
       c.masked = c.caution > 1 - maskIntent; // les plus prudents s'y mettent en premier
 
@@ -279,7 +282,7 @@ export class Epidemic {
 
     for (let i = 0; i < n; i++) {
       const c = citizens[i];
-      if (!c.alive || !c.isContagious) continue;
+      if (!c.alive || !c.isContagious || c.zombie >= ZombieState.ZOMBIE) continue;
       const placeFactor = c.place < 0 ? streetFactor : this.placeFactor[c.place];
       if (placeFactor <= 0) continue;
       const emission =
@@ -292,7 +295,7 @@ export class Epidemic {
         const j = neighbors[k];
         if (j >= n) continue;
         const o = citizens[j];
-        if (o.health !== Health.SUSCEPTIBLE || o.place !== c.place) continue;
+        if (o.health !== Health.SUSCEPTIBLE || o.place !== c.place || o.zombie >= ZombieState.ZOMBIE) continue;
         const dx = o.x - c.x;
         const dy = o.y - c.y;
         if (dx * dx + dy * dy >= r2) continue;
@@ -417,6 +420,7 @@ export class Epidemic {
     const hospital = this.city.hospitalIndex;
 
     for (const c of this.population.citizens) {
+      if (c.zombie >= ZombieState.ZOMBIE) continue; // zombies et leurs victimes : comptés par Zombies
       if (!c.alive) {
         counts.dead++;
         continue;

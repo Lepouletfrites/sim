@@ -3,13 +3,14 @@ import { Clock } from './Clock.js';
 import { Population } from '../agents/Population.js';
 import { Routine } from '../agents/Routine.js';
 import { Epidemic } from '../epidemic/Epidemic.js';
+import { Zombies, defaultZombieSettings } from '../zombie/Zombies.js';
 
 /**
  * Orchestre le temps simulé : timeScale + accumulateur à pas fixe.
  *
- * - Physique à pas fixe de 1/60 s : à x20, 20 sous-étapes par frame au lieu
+ * - Physique à pas fixe de 1/60 s : à x50, 50 sous-étapes par frame au lieu
  *   d'un grand pas, ce qui empêche les agents de traverser les murs.
- * - Décisions lentes (routine, épidémie) toutes les `tickInterval` secondes simulées.
+ * - Décisions lentes (épidémie, zombies, routine) toutes les `tickInterval` secondes simulées.
  */
 export class Simulation {
   constructor() {
@@ -18,6 +19,8 @@ export class Simulation {
     this.population = null;
     this.routine = null;
     this.epidemic = null;
+    this.zombies = null;
+    this.zombieSettings = defaultZombieSettings();
     this.timeScale = CONFIG.simulation.defaultTimeScale;
     this.accumulator = 0;
     this.tickTimer = 0;
@@ -45,6 +48,10 @@ export class Simulation {
     this.population.routine = this.routine;
     this.population.setCount(count);
     this.epidemic = new Epidemic(this.population, city, this.clock, this.routine, seed, this.settings);
+    this.zombies = new Zombies(
+      this.population, city, this.clock, this.routine, seed, this.zombieSettings, this.settings,
+    );
+    this.population.zombies = this.zombies;
     this.accumulator = 0;
     this.tickTimer = 0;
     this.alpha = 0;
@@ -58,6 +65,7 @@ export class Simulation {
     if (!this.population) return;
     this.population.setCount(count);
     this.epidemic.recount();
+    this.zombies.recount();
   }
 
   /** Curseur (valeur 0..1) ou mesure sanitaire (booléen). */
@@ -65,6 +73,11 @@ export class Simulation {
     this.settings[name] = value;
     // Une fermeture fait sortir les occupants sans attendre la fin de leur activité.
     if (this.routine && typeof value === 'boolean') this.routine.tick();
+  }
+
+  /** Réglage du mode zombie (déjà converti : 0..1, px, h, jours ou booléen). */
+  setZombieSetting(name, value) {
+    this.zombieSettings[name] = value;
   }
 
   update(frameDt) {
@@ -84,6 +97,7 @@ export class Simulation {
       if (this.tickTimer >= tickInterval) {
         this.tickTimer -= tickInterval;
         this.epidemic.tick(tickInterval);
+        this.zombies.tick(tickInterval);
         this.routine.tick();
       }
       this.accumulator -= fixedDt;

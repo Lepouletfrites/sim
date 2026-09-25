@@ -26,6 +26,7 @@ export function rollTraits(citizen, rng, city) {
 
   // Personnalité
   citizen.civism = rng.next();
+  citizen.bravery = rng.next();
   citizen.caution = clamp01(range(profile.caution));
   citizen.sociability = clamp01(range(profile.sociability));
   citizen.frailty = range(profile.frailty);

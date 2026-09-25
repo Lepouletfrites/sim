@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { EpidemicChart, CHART_BANDS } from './EpidemicChart.js';
+import { ZombiePanel } from './ZombiePanel.js';
 import { PlaceType, STREET, PLACE_LABELS, describeSchedule, isOpen } from '../world/PlaceTypes.js';
 import { CONTAGION_PLACES } from '../epidemic/Epidemic.js';
 import { Health } from '../agents/Citizen.js';
@@ -45,7 +46,17 @@ export class UI {
     onSetting,
     onInfect,
     onResetEpidemic,
+    onZombieSetting,
+    onReleaseZombie,
+    onHorde,
+    onResetZombies,
   }) {
+    this.zombiePanel = new ZombiePanel({
+      onSetting: onZombieSetting,
+      onRelease: onReleaseZombie,
+      onHorde,
+      onReset: onResetZombies,
+    });
     this.el = {
       clock: $('#hud-clock'),
       day: $('#hud-day'),
@@ -54,6 +65,8 @@ export class UI {
       kpiAlive: $('#kpi-alive'),
       kpiInfected: $('#kpi-infected'),
       kpiDead: $('#kpi-dead'),
+      kpiZombies: $('#kpi-zombies'),
+      kpiZombiesBox: $('#kpi-zombies-box'),
       pauseBadge: $('#pause-badge'),
       active: $('#stat-active'),
       dead: $('#stat-dead'),
@@ -242,6 +255,14 @@ export class UI {
     for (const dot of document.querySelectorAll('.dot--ring-home')) {
       dot.style.setProperty('--ring-color', colors.homeRing);
     }
+    for (const dot of document.querySelectorAll('.dot--ring-bitten')) {
+      dot.style.background = colors.health[0];
+      dot.style.setProperty('--ring-color', colors.bittenRing);
+    }
+    for (const dot of document.querySelectorAll('.dot--ring-fighter')) {
+      dot.style.background = colors.health[0];
+      dot.style.setProperty('--ring-color', colors.fighterRing);
+    }
     for (const swatch of document.querySelectorAll('.swatch[data-place]')) {
       const style = colors.places[swatch.dataset.place];
       swatch.style.background = style.fill;
@@ -349,5 +370,18 @@ export class UI {
     }
 
     this.chart.setData(epidemic.history, epidemic.historyVersion);
+
+    // Apocalypse
+    const zombies = simulation.zombies;
+    if (zombies) {
+      this.el.kpiZombiesBox.hidden = !zombies.active;
+      this.el.kpiZombies.textContent = zombies.counts.zombies;
+      this.zombiePanel.update(zombies);
+    }
+  }
+
+  /** Action du clic sur la carte : 'infect', 'zombie' ou 'strike'. */
+  get clickMode() {
+    return this.zombiePanel.clickMode;
   }
 }

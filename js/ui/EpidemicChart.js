@@ -12,12 +12,19 @@ export const CHART_BANDS = [
 ];
 
 /**
- * Courbe épidémique (aire empilée, temps en heures de jeu) dessinée sur un petit canvas,
+ * Courbe en aires empilées (temps en heures de jeu) dessinée sur un petit canvas,
  * avec réticule + info-bulle au survol. Ne se redessine que si les données changent.
  */
 export class EpidemicChart {
-  constructor(canvas, tooltip) {
+  /**
+   * @param {object} [options]
+   * @param {Array} [options.bands] bandes empilées de bas en haut ({ key, label, color })
+   * @param {string} [options.emptyText] message quand il n'y a pas encore de données
+   */
+  constructor(canvas, tooltip, { bands = CHART_BANDS, emptyText = 'Aucune épidémie en cours' } = {}) {
     this.canvas = canvas;
+    this.bands = bands;
+    this.emptyText = emptyText;
     this.ctx = canvas.getContext('2d');
     this.tooltip = tooltip;
     this.history = [];
@@ -27,7 +34,7 @@ export class EpidemicChart {
     this.height = 0;
 
     const styles = getComputedStyle(document.documentElement);
-    this.surface = styles.getPropertyValue('--bg-panel').trim() || '#1d2127';
+    this.surface = styles.getPropertyValue('--bg-card').trim() || '#1b1f24';
     this.muted = styles.getPropertyValue('--text-muted').trim() || '#8a939e';
 
     new ResizeObserver(() => this.resize()).observe(canvas);
@@ -85,14 +92,14 @@ export class EpidemicChart {
 
     if (n < 2) {
       ctx.textAlign = 'center';
-      ctx.fillText('Aucune épidémie en cours', w / 2, plotH / 2 + 4);
+      ctx.fillText(this.emptyText, w / 2, plotH / 2 + 4);
       return;
     }
 
     const tMax = history[n - 1].t || 1;
     let yMax = 1;
     for (const s of history) {
-      yMax = Math.max(yMax, CHART_BANDS.reduce((sum, band) => sum + s[band.key], 0));
+      yMax = Math.max(yMax, this.bands.reduce((sum, band) => sum + s[band.key], 0));
     }
     const x = (t) => (t / tMax) * w;
     const y = (v) => plotH - (v / yMax) * plotH;
@@ -100,7 +107,7 @@ export class EpidemicChart {
     // Aires empilées
     const lower = new Float32Array(n);
     const upper = new Float32Array(n);
-    for (const band of CHART_BANDS) {
+    for (const band of this.bands) {
       for (let i = 0; i < n; i++) upper[i] = lower[i] + history[i][band.key];
       ctx.fillStyle = band.color;
       ctx.beginPath();
@@ -116,8 +123,8 @@ export class EpidemicChart {
     ctx.strokeStyle = this.surface;
     ctx.lineWidth = 2;
     lower.fill(0);
-    for (let b = 0; b < CHART_BANDS.length - 1; b++) {
-      const key = CHART_BANDS[b].key;
+    for (let b = 0; b < this.bands.length - 1; b++) {
+      const key = this.bands[b].key;
       // Pas de séparateur tant qu'une bande est vide (évite un trait au ras de l'axe).
       if (history.every((s) => s[key] === 0)) continue;
       ctx.beginPath();
@@ -134,9 +141,11 @@ export class EpidemicChart {
     // Axe du temps
     ctx.fillStyle = this.muted;
     ctx.textAlign = 'left';
-    ctx.fillText('Jour 0', 0, h - 2);
+    // En heures tant que la courbe couvre moins de deux jours, en jours ensuite.
+    const short = tMax < 48;
+    ctx.fillText(short ? '0 h' : 'Jour 0', 0, h - 2);
     ctx.textAlign = 'right';
-    ctx.fillText(`Jour ${Math.floor(tMax / 24)}`, w, h - 2);
+    ctx.fillText(short ? `${Math.round(tMax)} h` : `Jour ${Math.floor(tMax / 24)}`, w, h - 2);
 
     // Réticule
     if (this.hoverIndex >= 0) {
@@ -157,7 +166,7 @@ export class EpidemicChart {
       return;
     }
     const s = this.history[this.hoverIndex];
-    const rows = [...CHART_BANDS]
+    const rows = [...this.bands]
       .reverse()
       .map(
         (b) =>
