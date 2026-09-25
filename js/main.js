@@ -10,7 +10,7 @@ import { UI } from './ui/UI.js';
 const STATS_INTERVAL = 0.25; // secondes entre deux mises à jour du DOM
 const RESIZE_DEBOUNCE = 150; // ms
 
-const viewport = document.getElementById('viewport');
+const mapContainer = document.getElementById('map');
 const canvas = document.getElementById('city-canvas');
 
 const state = {
@@ -90,7 +90,7 @@ new ResizeObserver(([entry]) => {
   } else {
     resizeTimer = setTimeout(buildWorld, RESIZE_DEBOUNCE);
   }
-}).observe(viewport);
+}).observe(mapContainer);
 
 // --- Boucle principale
 let statsTimer = 0;

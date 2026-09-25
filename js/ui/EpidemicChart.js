@@ -4,7 +4,7 @@ import { Health } from '../agents/Citizen.js';
 const AXIS_HEIGHT = 14;
 
 /** Bandes empilées de bas en haut. */
-const BANDS = [
+export const CHART_BANDS = [
   { key: 'dead', label: 'Décès', color: CONFIG.colors.health[Health.DEAD] },
   { key: 'infected', label: 'Infectés', color: CONFIG.colors.health[Health.SYMPTOMATIC] },
   { key: 'recovered', label: 'Guéris', color: CONFIG.colors.health[Health.RECOVERED] },
@@ -92,7 +92,7 @@ export class EpidemicChart {
     const tMax = history[n - 1].t || 1;
     let yMax = 1;
     for (const s of history) {
-      yMax = Math.max(yMax, BANDS.reduce((sum, band) => sum + s[band.key], 0));
+      yMax = Math.max(yMax, CHART_BANDS.reduce((sum, band) => sum + s[band.key], 0));
     }
     const x = (t) => (t / tMax) * w;
     const y = (v) => plotH - (v / yMax) * plotH;
@@ -100,7 +100,7 @@ export class EpidemicChart {
     // Aires empilées
     const lower = new Float32Array(n);
     const upper = new Float32Array(n);
-    for (const band of BANDS) {
+    for (const band of CHART_BANDS) {
       for (let i = 0; i < n; i++) upper[i] = lower[i] + history[i][band.key];
       ctx.fillStyle = band.color;
       ctx.beginPath();
@@ -116,8 +116,8 @@ export class EpidemicChart {
     ctx.strokeStyle = this.surface;
     ctx.lineWidth = 2;
     lower.fill(0);
-    for (let b = 0; b < BANDS.length - 1; b++) {
-      const key = BANDS[b].key;
+    for (let b = 0; b < CHART_BANDS.length - 1; b++) {
+      const key = CHART_BANDS[b].key;
       // Pas de séparateur tant qu'une bande est vide (évite un trait au ras de l'axe).
       if (history.every((s) => s[key] === 0)) continue;
       ctx.beginPath();
@@ -157,7 +157,7 @@ export class EpidemicChart {
       return;
     }
     const s = this.history[this.hoverIndex];
-    const rows = [...BANDS]
+    const rows = [...CHART_BANDS]
       .reverse()
       .map(
         (b) =>

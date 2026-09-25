@@ -2,6 +2,16 @@
 
 Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D), sans framework ni dépendance ni étape de build : une ville procédurale, ses habitants et leur vie quotidienne, et une épidémie qui s'y propage.
 
+## Interface
+
+- **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès).
+- **Carte** avec une légende repliable (habitants et types de bâtiments). Un clic infecte l'habitant le plus proche.
+- **Panneau latéral à trois onglets** (le dernier ouvert est mémorisé) :
+  - **Situation** : indicateurs, courbe de l'épidémie, état de santé, occupation de l'hôpital et soins, boutons d'action ;
+  - **Réglages** : virus (transmission, virulence), comportements (responsabilité, prudence, inquiétude), mesures sanitaires ;
+  - **Ville** : lieux et horaires, foyers de contamination, population, densité, régénération.
+- Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter).
+
 ## Fonctionnalités
 
 ### Ville et physique
@@ -130,7 +140,7 @@ js/
 ├── render/
 │   └── Renderer.js         Calque statique, jour/nuit, lieux fermés, agents
 └── ui/
-    ├── UI.js               Panneau latéral et raccourcis clavier
+    ├── UI.js               Barre d'outils, onglets, légende et raccourcis clavier
     └── EpidemicChart.js    Courbe de l'épidémie (aire empilée)
 ```
 

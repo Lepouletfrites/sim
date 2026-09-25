@@ -1,7 +1,8 @@
 import { CONFIG } from '../config.js';
-import { EpidemicChart } from './EpidemicChart.js';
+import { EpidemicChart, CHART_BANDS } from './EpidemicChart.js';
 import { PlaceType, STREET, PLACE_LABELS, describeSchedule, isOpen } from '../world/PlaceTypes.js';
 import { CONTAGION_PLACES } from '../epidemic/Epidemic.js';
+import { Health } from '../agents/Citizen.js';
 
 const $ = (selector) => document.querySelector(selector);
 const percent = (v) => `${Math.round(v)} %`;
@@ -13,15 +14,26 @@ const PLACES_SHOWN = [
   PlaceType.HOME, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT,
   PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, STREET,
 ];
-const EPIDEMIC_COUNTS = [
-  'susceptible', 'carriers', 'sickOut', 'toHospital', 'hospitalized',
-  'quarantined', 'bedridden', 'waitingBed', 'recovered', 'dead', 'masked', 'confined', 'severe',
+/** Compteurs affichés tels quels : clé de `epidemic.counts` = suffixe de l'id. */
+const COUNTS = [
+  'susceptible', 'carriers', 'sickOut', 'recovered', 'toHospital',
+  'quarantined', 'bedridden', 'waitingBed', 'severe', 'masked', 'confined',
+];
+/** Segments de la barre d'état de santé, dans l'ordre d'évolution de la maladie. */
+const HEALTH_SEGMENTS = [
+  { health: Health.SUSCEPTIBLE, value: (c) => c.susceptible },
+  { health: Health.INCUBATING, value: (c) => c.carriers },
+  { health: Health.SYMPTOMATIC, value: (c) => c.symptomatic },
+  { health: Health.RECOVERED, value: (c) => c.recovered },
+  { health: Health.DEAD, value: (c) => c.dead },
 ];
 const SPEED_KEYS = { 1: 1, 2: 5, 3: 10, 4: 25, 5: 50 };
+const TAB_STORAGE_KEY = 'citysim.tab';
 
 /**
- * Panneau latéral : lie le DOM aux callbacks de l'application.
- * Ne contient aucune logique de simulation.
+ * Interface : barre d'outils au-dessus de la carte, légende de la carte et
+ * panneau latéral à onglets. Lie le DOM aux callbacks de l'application,
+ * sans aucune logique de simulation.
  */
 export class UI {
   constructor({
@@ -35,36 +47,46 @@ export class UI {
     onResetEpidemic,
   }) {
     this.el = {
-      population: $('#stat-population'),
-      fps: $('#stat-fps'),
-      buildings: $('#stat-buildings'),
-      steps: $('#stat-steps'),
-      seed: $('#stat-seed'),
+      clock: $('#hud-clock'),
+      day: $('#hud-day'),
+      sky: $('#hud-sky'),
+      speedButtons: [...document.querySelectorAll('[data-scale]')],
+      kpiAlive: $('#kpi-alive'),
+      kpiInfected: $('#kpi-infected'),
+      kpiDead: $('#kpi-dead'),
+      pauseBadge: $('#pause-badge'),
+      active: $('#stat-active'),
+      dead: $('#stat-dead'),
+      deadRow: $('#stat-dead-row'),
+      lethality: $('#stat-lethality'),
+      hospitalized: $('#stat-hospitalized'),
+      hospitalMeter: $('#meter-hospital'),
+      awarenessValue: $('#value-awareness'),
+      awarenessMeter: $('#meter-awareness'),
+      counts: Object.fromEntries(COUNTS.map((key) => [key, $(`#stat-${key}`)])),
       popSlider: $('#slider-population'),
       popValue: $('#value-population'),
       densitySlider: $('#slider-density'),
       densityValue: $('#value-density'),
-      regenerate: $('#btn-regenerate'),
-      pauseBadge: $('#pause-badge'),
-      clock: $('#hud-clock'),
-      day: $('#hud-day'),
-      sky: $('#hud-sky'),
-      timeButtons: [...document.querySelectorAll('[data-scale]')],
-      infect: $('#btn-infect'),
-      resetEpidemic: $('#btn-reset-epidemic'),
-      awarenessValue: $('#value-awareness'),
-      awarenessMeter: $('#meter-awareness'),
-      lethality: $('#stat-lethality'),
-      counts: Object.fromEntries(EPIDEMIC_COUNTS.map((key) => [key, $(`#stat-${key}`)])),
+      fps: $('#stat-fps'),
+      steps: $('#stat-steps'),
+      buildings: $('#stat-buildings'),
+      seed: $('#stat-seed'),
     };
 
     this.chart = new EpidemicChart($('#epidemic-chart'), $('#chart-tooltip'));
+    this.setupTabs();
+    this.buildChartLegend();
+    this.buildHealthBar();
     this.buildPlacesList();
     this.buildContagionBars();
     this.applyLegendColors();
     this.setupSliders();
 
-    for (const button of this.el.timeButtons) {
+    // Sur petit écran, la légende repliée laisse la carte visible.
+    if (window.matchMedia('(max-width: 860px)').matches) $('#map-legend').open = false;
+
+    for (const button of this.el.speedButtons) {
       button.addEventListener('click', () => onTimeScale(Number(button.dataset.scale)));
     }
 
@@ -82,7 +104,9 @@ export class UI {
       onDensity(Number(this.el.densitySlider.value));
     });
 
-    this.el.regenerate.addEventListener('click', onRegenerate);
+    $('#btn-regenerate').addEventListener('click', onRegenerate);
+    $('#btn-infect').addEventListener('click', onInfect);
+    $('#btn-reset-epidemic').addEventListener('click', onResetEpidemic);
 
     for (const key of EPIDEMIC_SLIDERS) {
       const slider = $(`#slider-${key}`);
@@ -99,9 +123,6 @@ export class UI {
       checkbox.addEventListener('change', () => onSetting(key, checkbox.checked));
     }
 
-    this.el.infect.addEventListener('click', onInfect);
-    this.el.resetEpidemic.addEventListener('click', onResetEpidemic);
-
     window.addEventListener('keydown', (event) => {
       if (event.target instanceof HTMLInputElement && event.target.type !== 'range') return;
       if (event.code === 'Space') {
@@ -117,6 +138,64 @@ export class UI {
 
   // ------------------------------------------------------------ Construction
 
+  /** Onglets accessibles (clic, flèches gauche/droite), onglet actif mémorisé. */
+  setupTabs() {
+    this.tabs = [...document.querySelectorAll('[role="tab"]')];
+    let saved = null;
+    try {
+      saved = localStorage.getItem(TAB_STORAGE_KEY);
+    } catch {
+      // stockage indisponible (navigation privée...) : onglet par défaut
+    }
+    const initial = this.tabs.find((t) => t.dataset.tab === saved) ?? this.tabs[0];
+    this.selectTab(initial, false);
+
+    this.tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => this.selectTab(tab));
+      tab.addEventListener('keydown', (event) => {
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+        if (!step) return;
+        const next = this.tabs[(index + step + this.tabs.length) % this.tabs.length];
+        this.selectTab(next);
+        next.focus();
+      });
+    });
+  }
+
+  selectTab(tab, remember = true) {
+    for (const t of this.tabs) {
+      const selected = t === tab;
+      t.setAttribute('aria-selected', String(selected));
+      t.tabIndex = selected ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !selected;
+    }
+    if (!remember) return;
+    try {
+      localStorage.setItem(TAB_STORAGE_KEY, tab.dataset.tab);
+    } catch {
+      // sans importance
+    }
+  }
+
+  buildChartLegend() {
+    const list = $('#chart-legend');
+    for (const band of [...CHART_BANDS].reverse()) {
+      const li = document.createElement('li');
+      li.innerHTML = `<i style="background:${band.color}"></i>${band.label}`;
+      list.appendChild(li);
+    }
+  }
+
+  buildHealthBar() {
+    const bar = $('#health-bar');
+    this.healthSegments = HEALTH_SEGMENTS.map((segment) => {
+      const span = document.createElement('span');
+      span.style.background = CONFIG.colors.health[segment.health];
+      bar.appendChild(span);
+      return { ...segment, span };
+    });
+  }
+
   buildPlacesList() {
     const list = $('#places-list');
     this.placeRows = {};
@@ -125,7 +204,7 @@ export class UI {
       const hours = type === STREET ? 'Promenades et trajets' : describeSchedule(type);
       li.innerHTML = `
         <i class="swatch" data-place="${type}"></i>
-        <span class="places__name">${PLACE_LABELS[type]} <span class="badge"></span></span>
+        <span class="places__name">${PLACE_LABELS[type]} <span class="badge" hidden></span></span>
         <b>0</b>
         <span class="places__hours">${hours}</span>`;
       list.appendChild(li);
@@ -141,9 +220,8 @@ export class UI {
       li.innerHTML = `
         <span>${PLACE_LABELS[type]}</span>
         <span class="bars__track"><span class="bars__fill"></span></span>
-        <b>0</b>`;
+        <b>—</b>`;
       const fill = li.querySelector('.bars__fill');
-      fill.style.display = 'block';
       fill.style.background = CONFIG.colors.places[type].stroke;
       list.appendChild(li);
       this.bars[type] = { fill, value: li.querySelector('b') };
@@ -173,16 +251,13 @@ export class UI {
 
   setupSliders() {
     const { citizens, city, epidemic } = CONFIG;
-    const init = (slider, output, { min, max, default: value }, step, format = (v) => v) => {
-      Object.assign(slider, { min, max, step, value });
-      output.textContent = format(value);
+    const init = (key, { min, max, default: value }, step, format = (v) => v) => {
+      Object.assign($(`#slider-${key}`), { min, max, step, value });
+      $(`#value-${key}`).textContent = format(value);
     };
-
-    init(this.el.popSlider, this.el.popValue, citizens, citizens.step);
-    init(this.el.densitySlider, this.el.densityValue, city.density, 1);
-    for (const key of EPIDEMIC_SLIDERS) {
-      init($(`#slider-${key}`), $(`#value-${key}`), epidemic[key], 1, percent);
-    }
+    init('population', citizens, citizens.step);
+    init('density', city.density, 1);
+    for (const key of EPIDEMIC_SLIDERS) init(key, epidemic[key], 1, percent);
   }
 
   // ------------------------------------------------------------ Mises à jour
@@ -196,8 +271,10 @@ export class UI {
   }
 
   setTimeScale(scale) {
-    for (const button of this.el.timeButtons) {
-      button.classList.toggle('is-active', Number(button.dataset.scale) === scale);
+    for (const button of this.el.speedButtons) {
+      const active = Number(button.dataset.scale) === scale;
+      button.classList.toggle('is-active', active);
+      button.setAttribute('aria-pressed', String(active));
     }
     this.el.pauseBadge.hidden = scale !== 0;
   }
@@ -220,24 +297,41 @@ export class UI {
     const epidemic = simulation.epidemic;
     if (!epidemic) return;
 
-    const counts = epidemic.counts;
-    this.el.population.textContent = counts.alive;
-    for (const key of EPIDEMIC_COUNTS) this.el.counts[key].textContent = counts[key];
-    this.el.counts.hospitalized.textContent = `${counts.hospitalized} / ${epidemic.hospitalCapacity}`;
-    this.el.lethality.textContent = percent(epidemic.lethality * 100);
+    const c = epidemic.counts;
+    const infected = c.carriers + c.symptomatic;
 
+    // Barre d'outils
+    this.el.kpiAlive.textContent = c.alive;
+    this.el.kpiInfected.textContent = infected;
+    this.el.kpiDead.textContent = c.dead;
+
+    // Onglet Situation
+    this.el.active.textContent = infected;
+    this.el.dead.textContent = c.dead;
+    this.el.deadRow.textContent = c.dead;
+    this.el.lethality.textContent = percent(epidemic.lethality * 100);
+    for (const key of COUNTS) this.el.counts[key].textContent = c[key];
+    for (const segment of this.healthSegments) {
+      const value = segment.value(c);
+      segment.span.style.flexGrow = value;
+      segment.span.hidden = value === 0; // pas d'espacement pour un segment vide
+    }
+
+    const capacity = epidemic.hospitalCapacity;
+    this.el.hospitalized.textContent = `${c.hospitalized} / ${capacity}`;
+    this.el.hospitalMeter.style.width = `${Math.min(100, (100 * c.hospitalized) / capacity)}%`;
+    this.el.hospitalMeter.classList.toggle('is-full', c.hospitalized >= capacity);
+
+    // Onglet Réglages
     const awareness = epidemic.awareness * 100;
     this.el.awarenessValue.textContent = percent(awareness);
     this.el.awarenessMeter.style.width = `${awareness}%`;
 
-    // Occupation des lieux et ouverture
+    // Onglet Ville : occupation et ouverture des lieux
     for (const type of PLACES_SHOWN) {
       const row = this.placeRows[type];
       row.count.textContent = epidemic.byPlace[type];
-      if (type === STREET || !CONFIG.places.schedule[type]) {
-        row.badge.hidden = true;
-        continue;
-      }
+      if (type === STREET || !CONFIG.places.schedule[type]) continue;
       const open = isOpen(type, simulation.clock, simulation.settings);
       row.badge.hidden = false;
       row.badge.textContent = open ? 'ouvert' : 'fermé';
