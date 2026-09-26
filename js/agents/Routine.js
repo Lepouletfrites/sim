@@ -122,6 +122,14 @@ export class Routine {
       default:
     }
 
+    // Alerte zombie : un parent va chercher son enfant ; l'enfant l'attend là où il est.
+    if (c.fetching !== null && c.fetching.place >= 0) {
+      return { building: c.fetching.place, until: Infinity, activity: 'fetch' };
+    }
+    if (c.awaitingParent !== null && c.place >= 0) {
+      return { building: c.place, until: Infinity, activity: 'waiting' };
+    }
+
     // Apocalypse : on sort piller quand les vivres manquent, sinon on reste barricadé.
     if (c.looting && c.lootTarget >= 0) return { building: c.lootTarget, until: Infinity, activity: 'loot' };
     if (c.barricaded) return { building: c.home, until: Infinity, activity: 'barricaded' };
@@ -149,7 +157,22 @@ export class Routine {
       return { building: c.home, until: clock.next(c.wake), activity: 'sleep' };
     }
 
-    // 3. Travail (le présentéisme existe : un malade qui s'ignore y va quand même)
+    // 3a. École (cantine comprise), sauf fermeture ou alerte zombie
+    if (c.age === 'child') {
+      // Départ ~45 min avant la sonnerie ; l'école ouvre ses portes à 8 h.
+      const leaveAt = c.workStart - cfg.commuteLead;
+      const schoolDay = clock.weekday < 5 && !s.closeSchools && !this.zombieAlarm;
+      if (c.work >= 0 && schoolDay && h >= leaveAt && h < c.workEnd &&
+        (this.isOpen(PlaceType.SCHOOL) || h < c.workStart)) {
+        return { building: c.work, until: clock.next(c.workEnd), activity: 'school' };
+      }
+      const plan = this.leisure(c, mood);
+      // Le matin, on ne part pas en balade juste avant l'école.
+      if (c.work >= 0 && schoolDay && h < leaveAt) plan.until = Math.min(plan.until, clock.next(leaveAt));
+      return plan;
+    }
+
+    // 3b. Travail (le présentéisme existe : un malade qui s'ignore y va quand même)
     const workday = clock.weekday < 5 || (clock.weekday === 5 && c.worksSaturday);
     const hasWork = c.work >= 0 && workday;
     const leaveAt = c.workStart - cfg.commuteLead; // on part un peu avant pour arriver à l'heure
@@ -210,6 +233,9 @@ export class Routine {
     if (this.isOpen(PlaceType.RESTAURANT)) {
       options.push(['restaurant', leisure.restaurant.weight * mood * social]);
     }
+    // Rendre visite à un ami qui est chez lui (pas trop tard le soir).
+    const host = clock.hour < 21.5 ? this.friendAtHome(c) : null;
+    if (host) options.push(['visit', leisure.visit.weight * mood * social * (weekend ? 1.5 : 1)]);
 
     let total = 0;
     for (const [, w] of options) total += w;
@@ -227,8 +253,34 @@ export class Routine {
     const building =
       choice === 'home' ? c.home
         : choice === 'walk' ? -1
-          : this.pickNear(choice, c);
+          : choice === 'visit' ? host.home
+            : this.pickNear(choice, c);
+    // On sort rarement seul : un ami libre vient aussi.
+    if ((choice === 'restaurant' || choice === 'mall') && building >= 0 && rng.chance(CONFIG.routine.joinFriendChance)) {
+      const friend = this.friendAtHome(c);
+      if (friend) this.bringAlong(friend, building, until, choice);
+    }
     return { building, until, activity: choice };
+  }
+
+  /** Un ami chez lui, disponible (ni malade isolé, ni barricadé, ni en prison). */
+  friendAtHome(c) {
+    const friends = c.friends;
+    if (friends.length === 0) return null;
+    const start = this.rng.int(0, friends.length - 1);
+    for (let k = 0; k < friends.length; k++) {
+      const f = friends[(start + k) % friends.length];
+      if (f.alive && f.zombie === ZombieState.HUMAN && f.place >= 0 && f.place === f.home &&
+        f.activity === 'home' && f.care === Care.NONE && !f.barricaded && f.home !== c.home) return f;
+    }
+    return null;
+  }
+
+  bringAlong(friend, building, until, activity) {
+    friend.hold = false;
+    friend.activity = activity;
+    friend.activityEnd = until;
+    this.goTo(friend, building);
   }
 
   isAwake(c, h) {
@@ -267,8 +319,8 @@ export class Routine {
       this.replan(c);
       return;
     }
-    if (c.looting) {
-      // Pillage : ni horaires ni jauge.
+    if (c.looting || c.activity === 'fetch') {
+      // Pillage, ou parent venu chercher son enfant : ni horaires ni jauge.
       this.enter(c, b);
       this.occupancy[b]++;
       return;

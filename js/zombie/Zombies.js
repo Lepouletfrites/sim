@@ -139,8 +139,8 @@ export class Zombies {
       .slice(0, size);
     if (candidates.length === 0) return false;
     for (const c of candidates) this.turn(c);
-    const edge = ['ouest', 'est', 'nord', 'sud'][side];
-    this.log(`Une horde de ${candidates.length} zombies surgit par le ${edge} !`, 'zombie');
+    const edge = ['l\'ouest', 'l\'est', 'le nord', 'le sud'][side];
+    this.log(`Une horde de ${candidates.length} zombies surgit par ${edge} !`, 'zombie');
     return true;
   }
 
@@ -206,6 +206,8 @@ export class Zombies {
       c.barricaded = false;
       c.looting = false;
       c.lootTarget = -1;
+      c.fetching = null;
+      c.awaitingParent = null;
       c.siegeTarget = -1;
       c.target = null;
       c.threat = null;
@@ -309,7 +311,7 @@ export class Zombies {
   updateHuman(c, hours) {
     const cfg = CONFIG.zombie;
     const s = this.settings;
-    c.fighter = c.bravery < s.fighters;
+    c.fighter = c.age !== 'child' && c.bravery < s.fighters; // les enfants ne chassent pas le zombie
 
     if (c.zombie === ZombieState.BITTEN) {
       if (this.cureReady) {
@@ -324,8 +326,11 @@ export class Zombies {
       }
     }
 
+    if (c.fetching !== null || c.awaitingParent !== null) this.updateFetch(c);
+
     // Se barricader chez soi à l'alerte (les survivalistes restent dehors).
-    const hide = this.alarm && !c.fighter && c.caution > 1 - s.barricade;
+    // Les enfants sont gardés à la maison par leurs parents.
+    const hide = this.alarm && !c.fighter && (c.age === 'child' || c.caution > 1 - s.barricade);
     if (hide !== c.barricaded) {
       c.barricaded = hide;
       c.looting = false;
@@ -507,8 +512,13 @@ export class Zombies {
     const ready = h.fighter && this.alarm;
     const surprise = this.alarm ? 1 : cfg.surpriseDefense;
     const shelter = this.alarm && h.place >= 0 ? cfg.shelterDefense : 1;
+    // Frapper son conjoint, son enfant ou un ami transformé ? On hésite, souvent trop longtemps.
+    const relative = z.household === h.household || h.friends.includes(z);
+    if (relative) {
+      this.logThrottled('hesitate', 12, 'Face à un proche transformé, un habitant n\'ose pas frapper…', 'bad');
+    }
     const defense = s.defense * cfg.defenseRate * surprise * shelter *
-      (ready ? cfg.fighterDefense : cfg.civilianDefense);
+      (ready ? cfg.fighterDefense : cfg.civilianDefense) * (relative ? cfg.familyHesitation : 1);
     if (defense > 0 && this.rng.chance(1 - Math.exp(-defense * dt))) {
       this.destroy(z);
       if (ready) this.logThrottled('fighter', 12, 'Des survivalistes repoussent les zombies.', 'good');
@@ -601,6 +611,8 @@ export class Zombies {
     c.raid = null;
     c.prey = null;
     c.jailUntil = 0;
+    c.fetching = null;
+    c.awaitingParent = null;
 
     // Transformation à l'intérieur : le zombie reste dans la pièce, avec les occupants.
     if (where >= 0) {
@@ -629,6 +641,8 @@ export class Zombies {
 
   remove(c) {
     c.health = Health.DEAD;
+    c.fetching = null;
+    c.awaitingParent = null;
     c.place = -1;
     c.destination = -1;
     c.field = null;
@@ -664,6 +678,7 @@ export class Zombies {
     if (!this.alarm && c.zombies >= cfg.alarmThreshold) {
       this.alarm = true;
       this.log('ALERTE GÉNÉRALE : la population se barricade.', 'bad');
+      this.organizeFetch();
     } else if (this.alarm && c.zombies === 0 && c.bitten === 0) {
       this.alarm = false;
       this.log('Plus aucun zombie : fin de l\'alerte, la ville se relève.', 'good');
@@ -675,6 +690,58 @@ export class Zombies {
     const total = this.population.citizens.length;
     if (c.humans < total / 2) this.logOnce('half', 'La moitié de la population est tombée.', 'bad');
     if (c.humans === 0 && c.bitten === 0) this.logOnce('last', 'Le dernier humain est tombé. La ville appartient aux morts.', 'bad');
+  }
+
+  /**
+   * Alerte : les enfants hors de la maison (école, chez un ami…) attendent sur place
+   * qu'un parent vienne les chercher, quitte à traverser une ville infestée.
+   */
+  organizeFetch() {
+    const now = this.clock.time;
+    let fetched = 0;
+    for (const members of this.population.households.values()) {
+      for (const child of members) {
+        if (child.age !== 'child' || !child.alive || child.zombie !== ZombieState.HUMAN) continue;
+        if (child.place < 0 || child.place === child.home) continue;
+        const parent = members.find((m) => m.age !== 'child' && m.alive && m.zombie === ZombieState.HUMAN &&
+          m.fetching === null && m.care === Care.NONE && m.jailUntil <= now);
+        if (!parent) continue;
+        parent.fetching = child;
+        child.awaitingParent = parent;
+        child.awaitSince = now;
+        this.routine.replan(child);
+        this.routine.replan(parent);
+        fetched++;
+      }
+    }
+    if (fetched > 0) {
+      this.log(`Des parents foncent chercher leurs ${fetched > 1 ? `${fetched} enfants` : 'enfant'} à travers la ville.`, 'bad');
+    }
+  }
+
+  /** Suivi des retrouvailles : parent arrivé, parent perdu, ou attente trop longue. */
+  updateFetch(c) {
+    const now = this.clock.time;
+    if (c.awaitingParent !== null) {
+      const p = c.awaitingParent;
+      const lost = !p.alive || p.zombie !== ZombieState.HUMAN || p.fetching !== c;
+      if (lost || now - c.awaitSince > CONFIG.zombie.fetchTimeout || p.place === c.place) {
+        if (!lost && p.place === c.place) {
+          p.fetching = null;
+          this.logThrottled('reunited', 6, 'Des parents ont retrouvé leur enfant : ils rentrent se barricader ensemble.', 'good');
+          this.routine.replan(p);
+        }
+        c.awaitingParent = null;
+        this.routine.replan(c);
+      }
+    }
+    if (c.fetching !== null) {
+      const k = c.fetching;
+      if (!k.alive || k.zombie !== ZombieState.HUMAN || k.awaitingParent !== c) {
+        c.fetching = null;
+        this.routine.replan(c);
+      }
+    }
   }
 
   /** Le remède avance tant qu'il reste des humains pour chercher. */

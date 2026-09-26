@@ -26,6 +26,7 @@ export const CULT_SLIDERS = [
   { key: 'arson', unit: '%' },
   { key: 'violence', unit: '%' },
   { key: 'fireSpread', unit: '%' },
+  { key: 'vigilance', unit: '%' },
   { key: 'policeThreshold', unit: '%' },
   { key: 'policeCount', unit: 'n' },
   { key: 'firefighterCount', unit: 'n' },
@@ -67,7 +68,7 @@ const PREACH_VENUES = [
 ];
 const RAID_TARGETS = { mall: 3, restaurant: 2, nightclub: 2, work: 1.5, home: 1 };
 /** Activités qu'on interrompt volontiers pour une réunion. */
-const FREE_TIME = new Set(['home', 'walk', 'mall', 'restaurant', 'sleep', 'preach']);
+const FREE_TIME = new Set(['home', 'walk', 'mall', 'restaurant', 'visit', 'sleep', 'preach']);
 
 const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
@@ -125,6 +126,7 @@ export class Cult {
     this.totals = {
       fires: 0, ruins: 0, saved: 0, assaults: 0, vandalism: 0, raids: 0,
       killed: { assault: 0, fire: 0, brawl: 0 }, arrests: 0, policeRaids: 0,
+      investigations: 0, moved: 0,
     };
     this.counts = { members: 0, followers: 0, zealots: 0, curious: 0, jailed: 0, burning: 0 };
     this.startTime = this.clock.time;
@@ -206,6 +208,8 @@ export class Cult {
       jailed: 0,
       incidents: 0,
       rage: 0,
+      reports: 0,       // signalements (témoins, familles, victimes) depuis la dernière enquête
+      neighbors: null,  // foyers voisins du QG (cache)
       lockedUntil: 0,   // h : comptes gelés après une descente
       wasGang: false,
       raid: null,
@@ -498,6 +502,7 @@ export class Cult {
         c.goMeeting = guru || (member && this.rng.chance(cfg.meetingChance * (0.5 + 0.5 * c.conviction))) ||
           (curious && this.rng.chance(cfg.curiousMeetingChance));
         if (c.goMeeting && FREE_TIME.has(c.activity) && c.jailUntil <= now) this.routine.replan(c);
+        if (member && c.goMeeting) this.inviteFriends(c, day, now);
       }
 
       if (c.cult < 0) {
@@ -514,13 +519,22 @@ export class Cult {
 
       const cult = this.cults[c.cult];
       if (c.cultRank === CultRank.GURU) continue;
-      // Ferveur : entretenue par les réunions, elle s'use sans (vite, sans gourou).
+      // Ferveur : entretenue par les réunions, elle s'use sans (vite, sans gourou),
+      // et la famille hostile tente de ramener le fidèle à la raison.
       const inMeeting = c.activity === 'meeting' && c.place >= 0;
       if (inMeeting) {
         c.conviction = Math.min(1, c.conviction + cfg.meetingRate * hours);
       } else {
         const orphan = cult.guru === null || cult.guru.jailUntil > now ? 3 : 1;
         c.conviction -= cfg.devotionLoss * (1 - s.hold) * orphan * hours;
+        const hostile = this.hostileRelatives(c);
+        if (hostile > 0) {
+          c.conviction -= cfg.familyPull * s.vigilance * hostile * hours;
+          if (this.rng.chance(1 - Math.exp(-cfg.reportRate * s.vigilance * hostile * hours))) cult.reports++;
+          if (c.conviction < cfg.apostasyAt) {
+            this.logThrottled(`family-${cult.id}`, 12, `Une famille arrache un proche à « ${cult.name} ».`, 'good');
+          }
+        }
         if (c.conviction < cfg.apostasyAt) {
           this.leave(c, 'apostasy');
           continue;
@@ -530,6 +544,33 @@ export class Cult {
       const radical = cult.stage >= CultStage.GANG && c.civism < Math.min(1, s.radicalization + cult.rage);
       const rank = radical ? CultRank.ZEALOT : CultRank.FOLLOWER;
       if (rank !== c.cultRank) this.setRank(c, cult, rank);
+    }
+  }
+
+  /** Proches présents à la maison, lucides et hostiles à la secte. */
+  hostileRelatives(c) {
+    if (c.place < 0 || c.place !== c.home) return 0;
+    let n = 0;
+    for (const o of this.population.householdOf(c)) {
+      if (o !== c && o.place === c.place && o.cult < 0 && o.alive && o.age !== 'child' &&
+        o.civism > 0.5 && this.receptivity(o) === 0) n++;
+    }
+    return n;
+  }
+
+  /** Un fidèle qui va à la réunion y emmène parfois un ami réceptif. */
+  inviteFriends(c, day, now) {
+    const cfg = CONFIG.cult;
+    const cult = this.cults[c.cult];
+    for (const f of c.friends) {
+      if (f.cult >= 0 || !f.alive || f.zombie !== ZombieState.HUMAN || f.jailUntil > now) continue;
+      if (this.receptivity(f) <= 0 || (f.leaning >= 0 && f.leaning !== cult.id)) continue;
+      if (!this.rng.chance(cfg.inviteChance * this.settings.wordOfMouth * 2)) continue;
+      f.leaning = cult.id;
+      f.conviction = Math.max(f.conviction, cfg.curiousAt);
+      f.meetingDay = day;
+      f.goMeeting = true;
+      if (FREE_TIME.has(f.activity)) this.routine.replan(f);
     }
   }
 
@@ -570,7 +611,11 @@ export class Cult {
         if (!o || o === p || o.cult >= 0 || !o.alive || o.zombie !== ZombieState.HUMAN || o.place !== p.place) continue;
         if ((o.x - p.x) ** 2 + (o.y - p.y) ** 2 > r2) continue;
         const r = this.receptivity(o);
-        if (r <= 0) continue;
+        if (r <= 0) {
+          // Un passant lucide et civique signale ce prêcheur inquiétant.
+          if (o.civism > 1 - s.vigilance && this.rng.chance(1 - Math.exp(-cfg.reportRate * hours))) cult.reports++;
+          continue;
+        }
         let listening = o.hold && o.holdUntil > 0;
         // Un passant réceptif s'arrête pour écouter (pas s'il fuit un zombie ou court à l'hôpital).
         if (!listening && o.place < 0 && o.threat === null && o.activity !== 'hospital' &&
@@ -614,6 +659,20 @@ export class Cult {
 
       const cult = this.cults[c.cult];
       const amount = rate * this.boost(cult);
+      // En famille, l'emprise passe par les proches : conjoint, parents, colocataires.
+      if (c.place >= 0 && c.place === c.home) {
+        for (const o of this.population.householdOf(c)) {
+          if (o === c || o.cult >= 0 || o.place !== c.place || !o.alive || o.zombie !== ZombieState.HUMAN) continue;
+          const r = this.receptivity(o);
+          if (r > 0) this.persuade(o, cult, amount * cfg.familyBoost * r);
+        }
+      }
+      // Les amis croisés au même endroit (visite, sortie, bureau) sont travaillés au corps.
+      for (const o of c.friends) {
+        if (o.cult >= 0 || o.place !== c.place || !o.alive || o.zombie !== ZombieState.HUMAN) continue;
+        const r = this.receptivity(o);
+        if (r > 0) this.persuade(o, cult, amount * cfg.friendBoost * r);
+      }
       const count = grid.query(c.x, c.y, this.buffer);
       for (let k = 0; k < count; k++) {
         const o = citizens[this.buffer[k]];
@@ -779,9 +838,63 @@ export class Cult {
       }
 
       if (cult.jailed > 0) this.payBail(cult);
+      if (cult.reports >= cfg.reportThreshold && s.policeOn) this.investigate(cult);
+      if (cult.hq >= 0 && cult.stage >= CultStage.COMMUNITY) this.neighborsFlee(cult, hours);
       this.updateProphecy(cult);
       if (cult.stage === CultStage.GANG) this.planRaid(cult);
       if (cult.raid) this.updateRaid(cult);
+    }
+  }
+
+  /** Les signalements s'accumulent : enquête pour abus de faiblesse, le gourou en garde à vue. */
+  investigate(cult) {
+    const cfg = CONFIG.cult;
+    const guru = cult.guru;
+    const n = cult.reports;
+    cult.reports = 0;
+    cult.incidents += 2;
+    this.totals.investigations++;
+    if (!guru || !guru.alive || guru.jailUntil > this.clock.time) {
+      this.log(`${n} signalements contre « ${cult.name} » : une enquête est ouverte.`, 'good');
+      return;
+    }
+    const name = cult.guruName;
+    this.jail(guru, cfg.investigationJail);
+    this.log(`Après ${n} signalements (familles, témoins, victimes), ${name} est placé en garde à vue pour abus de faiblesse.`, 'good');
+  }
+
+  /** Les voisins du QG n'en peuvent plus (chants, allées et venues, menaces) : ils déménagent. */
+  neighborsFlee(cult, hours) {
+    const cfg = CONFIG.cult;
+    const city = this.city;
+    if (!cult.neighbors || cult.neighbors.hq !== cult.hq) {
+      const hq = city.buildings[cult.hq];
+      const near = new Set();
+      for (const b of city.buildings) {
+        if (b.type !== PlaceType.HOME || b === hq) continue;
+        const dx = Math.max(0, hq.x - (b.x + b.w), b.x - (hq.x + hq.w));
+        const dy = Math.max(0, hq.y - (b.y + b.h), b.y - (hq.y + hq.h));
+        if (Math.hypot(dx, dy) <= cfg.neighborRadius) near.add(b.index);
+      }
+      cult.neighbors = { hq: cult.hq, near };
+    }
+    const near = cult.neighbors.near;
+    if (near.size === 0) return;
+    const rate = cfg.moveRate[cult.stage >= CultStage.GANG ? 1 : 0] * (0.5 + this.insecurity);
+    const p = 1 - Math.exp(-rate * hours);
+    let moved = 0;
+    for (const members of this.population.households.values()) {
+      const first = members[0];
+      if (!first || !near.has(first.home) || members.some((m) => m.cult >= 0) || !this.rng.chance(p)) continue;
+      let home = -1;
+      for (let k = 0; k < 10 && (home < 0 || near.has(home)); k++) home = city.pickPlace(PlaceType.HOME, this.rng);
+      if (home < 0 || near.has(home)) continue;
+      for (const m of members) m.home = home;
+      moved += members.length;
+    }
+    if (moved > 0) {
+      this.totals.moved += moved;
+      this.logThrottled(`move-${cult.id}`, 12, `Excédés, des voisins du QG de « ${cult.name} » déménagent.`, 'info');
     }
   }
 
@@ -876,10 +989,14 @@ export class Cult {
   /** Habitants et salariés d'un bâtiment qui change de mains (ou brûle) : ils vont ailleurs. */
   relocate(index) {
     const city = this.city;
+    const moved = new Map(); // foyer -> nouveau logement : une famille déménage ensemble
     for (const c of this.population.citizens) {
       const member = c.cult >= 0 && this.cults[c.cult].hq >= 0 &&
         city.buildings[index].type === PlaceType.TEMPLE && city.buildings[index].cultId === c.cult;
-      if (c.home === index && !member) c.home = city.pickPlace(PlaceType.HOME, this.rng);
+      if (c.home === index && !member) {
+        if (!moved.has(c.household)) moved.set(c.household, city.pickPlace(PlaceType.HOME, this.rng));
+        c.home = moved.get(c.household);
+      }
       if (c.formerHome === index) c.formerHome = city.pickPlace(PlaceType.HOME, this.rng);
       if (c.work === index) c.work = city.pickPlace(PlaceType.WORK, this.rng);
     }
@@ -1176,6 +1293,7 @@ export class Cult {
             o.conviction = 0; // on ne rejoint pas ceux qui vous ont tabassé
             o.leaning = -1;
           }
+          cult.reports += 2; // la victime porte plainte
           this.routine.replan(o); // la victime rentre en vitesse
           this.logThrottled('assault', 6, `Agression nocturne : des fanatiques de « ${cult.name} » s'en prennent à un passant.`, 'bad');
         }

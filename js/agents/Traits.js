@@ -3,26 +3,27 @@ import { PlaceType } from '../world/PlaceTypes.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+/** Tire la composition d'un foyer : liste des tranches d'âge de ses membres. */
+export function rollHousehold(rng) {
+  const options = CONFIG.routine.households;
+  let r = rng.next();
+  for (const option of options) {
+    if ((r -= option.weight) <= 0) return option.members;
+  }
+  return options[options.length - 1].members;
+}
+
 /**
- * Tire le profil d'un habitant : âge, emploi, horaires et personnalité.
+ * Tire le profil d'un habitant : emploi (ou école), horaires et personnalité.
  * C'est cette variance individuelle qui fait qu'à réglages égaux,
  * deux habitants ne réagissent jamais de la même façon.
+ * Le domicile et l'âge sont fixés avant, par le foyer (voir Population).
  */
-export function rollTraits(citizen, rng, city) {
+export function rollTraits(citizen, rng, city, age) {
   const cfg = CONFIG.routine;
   const range = ([min, max]) => rng.range(min, max);
-
-  // Tranche d'âge
-  let r = rng.next();
-  citizen.age = 'senior';
-  for (const [age, profile] of Object.entries(cfg.ages)) {
-    if (r < profile.share) {
-      citizen.age = age;
-      break;
-    }
-    r -= profile.share;
-  }
-  const profile = cfg.ages[citizen.age];
+  citizen.age = age;
+  const profile = cfg.ages[age];
 
   // Personnalité
   citizen.civism = rng.next();
@@ -34,15 +35,26 @@ export function rollTraits(citizen, rng, city) {
   // (moyenne 1, ~10 % des porteurs émettent plus de 2,5 fois la moyenne).
   citizen.infectivity = (0.3 + rng.next() ** 3 * 4) / 1.3;
 
-  // Logement, emploi, horaires
-  citizen.home = city.pickPlace(PlaceType.HOME, rng);
+  citizen.wake = range(profile.wake);
+  citizen.bedtime = range(profile.bedtime);
+  citizen.worksSaturday = false;
+
+  if (age === 'child') {
+    // L'école la plus proche à pied de la maison ; pas de sorties nocturnes.
+    citizen.work = citizen.home >= 0 ? city.nearestPlaceByPath(PlaceType.SCHOOL, citizen.home) : -1;
+    const [start, end] = cfg.schoolHours;
+    citizen.workStart = start + rng.range(-0.15, 0.1);
+    citizen.workEnd = end + rng.range(0, 0.25);
+    citizen.nightOwl = false;
+    citizen.gullibility = 0; // les enfants ne rejoignent pas les sectes
+    return;
+  }
+
   citizen.work = rng.chance(profile.employment) ? city.pickPlace(PlaceType.WORK, rng) : -1;
   citizen.workStart = range(cfg.workStart);
   citizen.workEnd = citizen.workStart + range(cfg.workDuration);
   citizen.worksSaturday = rng.chance(cfg.saturdayWork);
-  citizen.wake = range(profile.wake);
-  citizen.bedtime = range(profile.bedtime);
-  citizen.nightOwl = citizen.age !== 'senior' && citizen.sociability > cfg.nightOwlSociability;
+  citizen.nightOwl = age !== 'senior' && citizen.sociability > cfg.nightOwlSociability;
   // Crédulité : les jeunes et les isolés (peu sociables) se laissent plus facilement embrigader.
-  citizen.gullibility = clamp01(rng.next() * 0.85 + (citizen.age === 'young' ? 0.12 : 0) + (0.5 - citizen.sociability) * 0.1);
+  citizen.gullibility = clamp01(rng.next() * 0.85 + (age === 'young' ? 0.12 : 0) + (0.5 - citizen.sociability) * 0.1);
 }

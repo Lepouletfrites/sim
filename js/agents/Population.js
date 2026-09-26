@@ -3,7 +3,8 @@ import { Random } from '../core/Random.js';
 import { SpatialHashGrid } from '../core/SpatialHashGrid.js';
 import { resolveCircleRect, clampToBounds } from '../physics/Collision.js';
 import { Citizen } from './Citizen.js';
-import { rollTraits } from './Traits.js';
+import { rollTraits, rollHousehold } from './Traits.js';
+import { PlaceType } from '../world/PlaceTypes.js';
 import { WanderBehavior } from './WanderBehavior.js';
 import { ZombieState } from '../zombie/ZombieState.js';
 
@@ -37,27 +38,103 @@ export class Population {
     );
     this.neighborBuffer = new Int32Array(256);
     this.buildingBuffer = [];
+    this.households = new Map(); // id -> membres
+    this.nextHousehold = 0;
   }
 
   get count() {
     return this.citizens.length;
   }
 
+  /**
+   * Ajoute des foyers entiers (même logement) jusqu'à atteindre `count` ;
+   * en réduisant, on retire les derniers arrivés.
+   */
   setCount(count) {
     const cfg = CONFIG.citizens;
+    const rng = this.rng;
     this.grid.ensureCapacity(count);
+    const firstNew = this.citizens.length;
 
     while (this.citizens.length < count) {
-      const radius = this.rng.range(cfg.radiusMin, cfg.radiusMax);
-      const speed = this.rng.range(cfg.speedMin, cfg.speedMax);
-      const { x, y } = this.city.randomSpawnPoint(this.rng, radius);
-      const citizen = new Citizen(this.nextId++, x, y, radius, speed);
-      rollTraits(citizen, this.rng, this.city);
-      this.behavior.initialize(citizen);
-      this.citizens.push(citizen);
-      if (this.routine) this.routine.initialize(citizen);
+      const home = this.city.pickPlace(PlaceType.HOME, rng);
+      const id = this.nextHousehold++;
+      const members = [];
+      let ages = rollHousehold(rng);
+      // Le dernier foyer est tronqué : on garde toujours un adulte avec les enfants.
+      const room = count - this.citizens.length;
+      if (ages.length > room) ages = ages.filter((a) => a !== 'child').slice(0, room);
+      for (const age of ages) {
+        const child = age === 'child';
+        const radius = child ? rng.range(...cfg.childRadius) : rng.range(cfg.radiusMin, cfg.radiusMax);
+        const speed = child ? rng.range(...cfg.childSpeed) : rng.range(cfg.speedMin, cfg.speedMax);
+        const { x, y } = this.city.randomSpawnPoint(rng, radius);
+        const citizen = new Citizen(this.nextId++, x, y, radius, speed);
+        citizen.home = home;
+        citizen.household = id;
+        rollTraits(citizen, rng, this.city, age);
+        this.behavior.initialize(citizen);
+        this.citizens.push(citizen);
+        members.push(citizen);
+        if (this.routine) this.routine.initialize(citizen);
+      }
+      this.households.set(id, members);
     }
-    if (this.citizens.length > count) this.citizens.length = count;
+    if (this.citizens.length > firstNew) this.assignFriends(this.citizens.slice(firstNew));
+    if (this.citizens.length > count) {
+      for (const c of this.citizens.slice(count)) {
+        const members = this.households.get(c.household);
+        if (members) members.splice(members.indexOf(c), 1);
+      }
+      this.citizens.length = count;
+      const present = new Set(this.citizens);
+      for (const c of this.citizens) c.friends = c.friends.filter((f) => present.has(f));
+    }
+  }
+
+  /**
+   * Amitiés (réciproques) : parmi quelques dizaines de candidats tirés au hasard, on
+   * garde ceux du même âge, qui habitent près de chez soi, ou qui travaillent
+   * (étudient) au même endroit.
+   */
+  assignFriends(newcomers) {
+    const cfg = CONFIG.routine.friends;
+    const rng = this.rng;
+    const all = this.citizens;
+    const buildings = this.city.buildings;
+    const ageRank = { child: 0, young: 1, adult: 2, senior: 3 };
+    const center = (c) => {
+      const b = buildings[c.home];
+      return b ? [b.x + b.w / 2, b.y + b.h / 2] : [c.x, c.y];
+    };
+    for (const c of newcomers) {
+      const wanted = rng.int(cfg.count[0], cfg.count[1]);
+      if (c.friends.length >= wanted) continue;
+      const [cx, cy] = center(c);
+      const scored = [];
+      for (let k = 0; k < cfg.sample; k++) {
+        const o = all[rng.int(0, all.length - 1)];
+        if (o === c || o.household === c.household || c.friends.includes(o) || o.friends.length >= cfg.max) continue;
+        const gap = Math.abs(ageRank[o.age] - ageRank[c.age]);
+        if ((c.age === 'child') !== (o.age === 'child')) continue; // les enfants entre eux
+        const [ox, oy] = center(o);
+        const near = 1 / (1 + Math.hypot(ox - cx, oy - cy) / 200);
+        const together = c.work >= 0 && c.work === o.work ? 2 : 0;
+        scored.push([o, (gap === 0 ? 2 : gap === 1 ? 1 : 0.2) + 2 * near + together + rng.next()]);
+      }
+      scored.sort((a, b) => b[1] - a[1]);
+      for (const [o] of scored) {
+        if (c.friends.length >= wanted) break;
+        if (c.friends.includes(o)) continue;
+        c.friends.push(o);
+        o.friends.push(c);
+      }
+    }
+  }
+
+  /** Membres du foyer de l'habitant (lui compris). */
+  householdOf(c) {
+    return this.households.get(c.household) ?? [c];
   }
 
   step(dt) {

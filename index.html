@@ -84,6 +84,7 @@
               <ul>
                 <li><i class="swatch" data-place="home"></i>Logement</li>
                 <li><i class="swatch" data-place="work"></i>Bureaux</li>
+                <li><i class="swatch" data-place="school"></i>École</li>
                 <li><i class="swatch" data-place="mall"></i>Centre co.</li>
                 <li><i class="swatch" data-place="restaurant"></i>Restaurant</li>
                 <li><i class="swatch" data-place="nightclub"></i>Boîte de nuit</li>
@@ -172,9 +173,23 @@
             </div>
 
             <div class="card">
+              <h3>Dépistage et immunité</h3>
+              <ul class="rows">
+                <li>Tests réalisés<b id="stat-testsDone">0</b></li>
+                <li>Cas confirmés<b id="stat-testsConfirmed">0</b></li>
+                <li>Cas contacts prévenus<b id="stat-testsContacts">0</b></li>
+                <li>Cas contacts isolés en ce moment<b id="stat-tracedIsolated">0</b></li>
+                <li class="rows__sub">capacité du laboratoire<b id="stat-testsCapacity">—</b></li>
+                <li>Réinfectés en ce moment<b id="stat-reinfected">0</b></li>
+                <li>Guéris redevenus vulnérables<b id="stat-lostImmunity">0</b></li>
+              </ul>
+              <p class="note" id="testing-note">Activez « Dépistage et traçage » dans les réglages.</p>
+            </div>
+
+            <div class="card">
               <h3>Où se contamine-t-on ?</h3>
               <ul class="bars" id="contagion-bars"></ul>
-              <p class="note">Jamais chez soi : seulement au travail, dans les lieux publics et, un peu, dans la rue.</p>
+              <p class="note">À la maison, seulement entre membres du même foyer. Ailleurs, entre personnes proches dans le même lieu ; un peu dans la rue.</p>
             </div>
           </div>
 
@@ -191,6 +206,11 @@
                 <span class="control__row"><span>Virulence</span><output id="value-virulence">10 %</output></span>
                 <input type="range" id="slider-virulence">
                 <span class="control__help">Part de formes graves et leur létalité (sans soins : ~23 % à 10 %, ~95 % à 100 %). L'hôpital divise le risque par 5.</span>
+              </label>
+              <label class="control" for="slider-immunity">
+                <span class="control__row"><span>Durée de l'immunité</span><output id="value-immunity">90 j</output></span>
+                <input type="range" id="slider-immunity">
+                <span class="control__help">Après guérison, on est protégé un temps (0 = à vie), puis de nouveau vulnérable : l'épidémie revient par vagues. Une réinfection est plus souvent bénigne.</span>
               </label>
             </div>
 
@@ -220,7 +240,9 @@
               <h3>Mesures sanitaires</h3>
               <label class="switch"><input type="checkbox" id="policy-closeNightclubs"><span class="switch__track"></span>Fermer les boîtes de nuit</label>
               <label class="switch"><input type="checkbox" id="policy-closeCommerce"><span class="switch__track"></span>Fermer commerces et restaurants</label>
+              <label class="switch"><input type="checkbox" id="policy-closeSchools"><span class="switch__track"></span>Fermer les écoles<span class="switch__help">Les enfants restent à la maison… avec leur famille</span></label>
               <label class="switch"><input type="checkbox" id="policy-telework"><span class="switch__track"></span>Télétravail obligatoire</label>
+              <label class="switch"><input type="checkbox" id="policy-tracing"><span class="switch__track"></span>Dépistage et traçage<span class="switch__help">Les malades se font tester ; un cas confirmé fait prévenir son foyer et les personnes croisées ces 3 derniers jours, qui s'isolent une semaine (si elles sont civiques). Le laboratoire peut saturer.</span></label>
             </div>
           </div>
         </section>
@@ -519,6 +541,8 @@
                 <li>Morts (agressions, rixes)<b id="cstat-killedViolence">0</b></li>
                 <li>Morts dans les incendies<b id="cstat-killedFire">0</b></li>
                 <li>Interpellations<b id="cstat-arrests">0</b></li>
+                <li>Enquêtes pour abus de faiblesse<b id="cstat-investigations">0</b></li>
+                <li>Voisins des QG partis vivre ailleurs<b id="cstat-moved">0</b></li>
                 <li>En cellule<b id="cstat-jailed">0</b></li>
               </ul>
             </div>
@@ -651,6 +675,15 @@
                 <span class="control__row"><span>Propagation du feu</span><output id="cvalue-fireSpread">40 %</output></span>
                 <input type="range" id="cslider-fireSpread">
                 <span class="control__help">Le feu saute aux bâtiments voisins : redoutable dans une ville dense.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Résistance de la société</h3>
+              <label class="control" for="cslider-vigilance">
+                <span class="control__row"><span>Vigilance</span><output id="cvalue-vigilance">40 %</output></span>
+                <input type="range" id="cslider-vigilance">
+                <span class="control__help">Les familles hostiles ramènent leurs proches à la raison, témoins et victimes signalent la secte : au-delà de 12 signalements, le gourou part en garde à vue. Les voisins du QG, eux, déménagent.</span>
               </label>
             </div>
 

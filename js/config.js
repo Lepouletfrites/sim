@@ -54,12 +54,18 @@ export const CONFIG = {
   places: {
     mallEvery: 45,            // 1 centre commercial pour ~45 bâtiments (1 à 3)
     nightclubEvery: 50,       // 1 boîte de nuit pour ~50 bâtiments (1 à 3)
+    schoolEvery: 25,          // 1 école pour ~25 bâtiments (1 à 3)
     restaurantShare: 0.08,
     workShare: 0.25,
     capacityPerArea: 1 / 70,  // personnes par px² (hors logements, jamais pleins)
     // Jours : 0 = lundi ... 6 = dimanche. Créneaux en heures, fin > 24 = lendemain.
+    // Un lieu peut avoir plusieurs règles (liste) : l'école ferme le mercredi après-midi.
     schedule: {
       work: { days: [0, 1, 2, 3, 4, 5], slots: [[7, 19]] },
+      school: [
+        { days: [0, 1, 3, 4], slots: [[8, 16.5]] },
+        { days: [2], slots: [[8, 12]] },
+      ],
       mall: { days: [0, 1, 2, 3, 4, 5], slots: [[9, 20]] },
       restaurant: { days: [0, 1, 2, 3, 4, 5, 6], slots: [[11.5, 14.5], [18.5, 23.5]] },
       nightclub: { days: [4, 5], slots: [[23, 29]] }, // vendredi et samedi, 23 h - 5 h
@@ -67,7 +73,12 @@ export const CONFIG = {
     // Multiplicateur du risque de contagion selon le lieu du contact
     transmission: {
       street: 0.3,            // air libre : aérosols vite dilués
-      home: 0,                // les habitants ne se contaminent pas entre logements
+      home: 0,                // pas de contagion entre foyers d'un même immeuble...
+      household: 0.1,      // ...mais au sein du foyer, sans condition de distance : on partage
+                              // cuisine et salle de bains (~20 à 30 % des proches contaminés)
+      isolatedAtHome: 0.5,    // un malade en quarantaine s'isole dans sa chambre
+      visit: 0.4,             // visite chez des amis : salon, repas, proximité
+      school: 0.35,           // classes pleines (beaucoup de contacts), mais enfants peu contagieux
       work: 1,
       mall: 0.7,              // grand volume, contacts brefs
       restaurant: 1.6,        // sans masque, face à face, longue durée
@@ -80,7 +91,27 @@ export const CONFIG = {
 
   /** Emplois du temps et profils de la population. */
   routine: {
+    // Foyers : composition (âges des membres) et fréquence, d'après la structure des ménages
+    // en France. Taille moyenne ~2,1 ; ~20 % d'enfants, ~17 % de seniors.
+    households: [
+      { weight: 0.14, members: ['young'] },
+      { weight: 0.15, members: ['adult'] },
+      { weight: 0.12, members: ['senior'] },
+      { weight: 0.07, members: ['young', 'young'] },           // couple ou colocation
+      { weight: 0.12, members: ['adult', 'adult'] },
+      { weight: 0.10, members: ['senior', 'senior'] },
+      { weight: 0.10, members: ['adult', 'adult', 'child'] },
+      { weight: 0.10, members: ['adult', 'adult', 'child', 'child'] },
+      { weight: 0.04, members: ['adult', 'adult', 'child', 'child', 'child'] },
+      { weight: 0.05, members: ['adult', 'child'] },          // famille monoparentale
+      { weight: 0.01, members: ['senior', 'adult', 'adult', 'child'] }, // trois générations
+    ],
     ages: {
+      child: {
+        label: 'Enfants', employment: 0,
+        wake: [7, 7.5], bedtime: [20, 21.5], frailty: [0.1, 0.3],
+        sociability: [0.5, 1], caution: [0, 0.4],
+      },
       young: {
         share: 0.25, label: 'Jeunes', employment: 0.6,
         wake: [7, 9.5], bedtime: [23, 26], frailty: [0.2, 0.6],
@@ -97,6 +128,7 @@ export const CONFIG = {
         sociability: [0.1, 0.5], caution: [0.3, 1],
       },
     },
+    schoolHours: [8.25, 16.5], // entrée et sortie des classes
     workStart: [7.5, 9.5],
     commuteLead: 0.75,        // départ ~45 min avant l'embauche
     venueCandidates: 3,       // on choisit le plus proche parmi 3 lieux tirés au hasard
@@ -106,7 +138,11 @@ export const CONFIG = {
     nightOwlSociability: 0.65, // ~ 1 jeune sur 2, 1 adulte sur 4
     nightclubChance: 0.6,     // chance de sortir en boîte (× sociabilité), si ouverte
     // Poids des activités de temps libre, et durées (h)
+    // Amitiés : tirées parmi des candidats proches (âge, quartier, collègues ou camarades)
+    friends: { count: [2, 5], sample: 40, max: 7 },
+    joinFriendChance: 0.5,    // on propose à un ami libre de venir au restaurant ou au centre co.
     leisure: {
+      visit: { weight: 0.5, duration: [1.5, 3] }, // chez un ami
       home: { weight: 1, duration: [1, 3] },
       walk: { weight: 0.6, duration: [0.5, 2] },
       mall: { weight: 0.5, duration: [1, 3] },
@@ -127,6 +163,8 @@ export const CONFIG = {
     step: 50,
     radiusMin: 3,
     radiusMax: 4,
+    childRadius: [2.2, 2.7],
+    childSpeed: [65, 90],
     // ~1 km/h de jeu = 10 px/s : un trajet domicile-travail dure 30 à 60 min.
     // Reste < 2 px par sous-étape : pas de risque de traverser un mur.
     speedMin: 70,
@@ -150,16 +188,34 @@ export const CONFIG = {
 
   epidemic: {
     // Curseurs (en %)
-    transmission: { min: 0, max: 100, default: 12 },   // chance de contaminer par heure de contact rapproché
+    transmission: { min: 0, max: 100, default: 3 },    // chance de contaminer par heure de contact rapproché
     virulence: { min: 0, max: 100, default: 10 },      // chance de forme grave (× fragilité)
     responsibility: { min: 0, max: 100, default: 50 }, // part des malades qui se prennent en charge
     prudence: { min: 0, max: 100, default: 50 },       // distanciation, masques, confinement volontaire
+    immunity: { min: 0, max: 360, default: 90, step: 10 }, // jours de protection après guérison (0 = à vie)
+    reinfectionSeverity: 0.5, // chaque infection passée divise le risque de forme grave par 2
+
+    // Dépistage et traçage des contacts (mesure sanitaire)
+    testing: {
+      chance: 0.8,            // part des malades qui se font tester (× civisme)
+      delay: [6, 24],         // h entre la demande et le résultat
+      perCapitaPerDay: 0.05,  // capacité : tests par habitant et par jour
+      minPerDay: 10,
+      backlogDelay: 12,       // labo saturé : on repasse plus tard (h)
+    },
+    tracing: {
+      memory: 72,             // h : on retrouve les contacts des 3 derniers jours
+      minExposure: 1,         // h cumulées à moins de 12 px pour être "cas contact"
+      quarantine: 168,        // h d'isolement d'un cas contact
+      maxContacts: 80,        // taille du carnet de contacts d'un porteur
+    },
 
     contactRadius: 12,        // distance de contagion (<= gridCellSize)
     // Durées en heures de jeu
     latent: [24, 48],         // contaminé mais pas encore contagieux
     incubation: [48, 120],    // délai total avant symptômes (contagieux après la latence)
     asymptomaticCarriage: [72, 168],
+    symptomaticContagious: [96, 168], // un malade n'est plus contagieux après 4 à 7 jours de symptômes
     illness: [120, 240],      // forme légère
     severeIllness: [240, 400],
     treatment: [120, 240],    // hospitalisation (plafonnée à la durée restante)
@@ -193,7 +249,8 @@ export const CONFIG = {
     confineRate: 0.02,        // probabilité / h de se confiner (prudence et inquiétude max)
     confineDuration: [24, 72],
 
-    hospitalCapacity: 40,
+    bedsPerCapita: 0.06,      // lits d'hôpital par habitant (30 pour 500 habitants)
+    minBeds: 10,
     deathMarkLife: 12,        // h d'affichage d'un décès sur la carte
     sampleInterval: 2,        // h entre deux points de la courbe
     maxSamples: 300,          // au-delà, l'historique est sous-échantillonné
@@ -238,6 +295,8 @@ export const CONFIG = {
     surpriseDefense: 0.4,     // avant l'alerte, personne ne s'attend à devoir se battre
     shelterDefense: 2.5,      // retranché dans un bâtiment (armes de fortune, portes, meubles)
     panicBoost: 1.35,         // vitesse d'un humain qui fuit
+    familyHesitation: 0.25,   // face à un proche transformé, on se défend 4 fois moins bien
+    fetchTimeout: 8,          // h : un enfant attend ses parents à l'école, puis rentre seul
     // Siège : chaque zombie collé à un bâtiment occupé use la barricade (en "zombie-heures").
     // L'entrée cède à breachMin + breachRange × solidité : ~5 h de siège pour 5 zombies à 60 %.
     breachMin: 4,
@@ -276,16 +335,17 @@ export const CONFIG = {
     // Curseurs : recrutement
     charisma: { min: 0, max: 100, default: 55 },        // % : force de conviction des prêches
     wordOfMouth: { min: 0, max: 100, default: 35 },     // % : les fidèles recrutent leurs proches
-    credulity: { min: 0, max: 100, default: 35 },       // % de la population réceptive
+    credulity: { min: 0, max: 100, default: 30 },       // % de la population réceptive
     hold: { min: 0, max: 100, default: 60 },            // % : emprise (les fidèles restent)
     tithe: { min: 0, max: 100, default: 50 },           // % : dîme versée par chaque fidèle
     // Croissance
-    hqMembers: { min: 3, max: 80, default: 12 },        // fidèles pour acheter un QG
-    gangMembers: { min: 10, max: 200, default: 35 },    // fidèles pour basculer en gang
+    hqMembers: { min: 3, max: 80, default: 8 },         // fidèles pour acheter un QG
+    gangMembers: { min: 5, max: 200, default: 15 },     // fidèles pour basculer en gang
     radicalization: { min: 0, max: 100, default: 35 },  // % des fidèles qui deviennent fanatiques
     arson: { min: 0, max: 100, default: 55 },           // % : un raid finit en incendie
     violence: { min: 0, max: 100, default: 35 },        // % : agressions des fanatiques
     fireSpread: { min: 0, max: 100, default: 40 },      // % : propagation du feu aux voisins
+    vigilance: { min: 0, max: 100, default: 40 },       // % : familles et citoyens qui résistent et signalent
     // Riposte
     policeThreshold: { min: 0, max: 100, default: 20 }, // % d'insécurité avant l'intervention
     policeCount: { min: 1, max: 30, default: 6 },
@@ -302,11 +362,21 @@ export const CONFIG = {
 
     maxCults: 4,
     preachRadius: 70,         // px : portée d'un prêche
-    sermonRate: 1.6,          // conviction / h d'écoute (charisme 100 %, réceptivité 1)
+    sermonRate: 0.8,          // conviction / h d'écoute (charisme 100 %, réceptivité 1)
     listenBoost: 3,           // celui qui s'arrête pour écouter est bien plus touché
-    listenChance: 6,          // / h : un passant réceptif s'arrête pour écouter
+    listenChance: 3,          // / h : un passant réceptif s'arrête pour écouter
     listenDuration: [0.3, 1],
-    wordRate: 0.8,            // conviction / h de contact avec un fidèle (bouche-à-oreille 100 %)
+    wordRate: 0.7,            // conviction / h de contact avec un fidèle (bouche-à-oreille 100 %)
+    familyBoost: 0.5,         // à la maison, les proches sont exposés en permanence (× taux)
+    friendBoost: 0.4,         // un ami croisé (même lieu) est influencé, à toute distance
+    inviteChance: 0.15,       // (× bouche-à-oreille) un fidèle emmène un ami réceptif à la réunion
+    // Résistance de la société (× vigilance)
+    familyPull: 0.05,         // ferveur / h retirée à un fidèle par proche hostile à la maison
+    reportRate: 0.05,         // signalements / h d'un témoin (prêche, famille)
+    reportThreshold: 12,      // signalements avant l'enquête pour abus de faiblesse
+    investigationJail: 48,    // h de garde à vue du gourou
+    neighborRadius: 60,       // px : voisins du QG
+    moveRate: [0.003, 0.012], // / h : un foyer voisin du QG déménage (communauté, gang)
     contactRadius: 14,
     meetingRate: 0.8,         // conviction / h en réunion (curieux) ; ferveur retrouvée (fidèles)
     doubtRate: 0.02,          // perte de conviction / h sans contact (curieux)
@@ -408,6 +478,7 @@ export const CONFIG = {
     places: {
       home: { fill: '#2c3e50', stroke: '#34495e' },
       work: { fill: '#1f3a3a', stroke: '#2f6b66' },
+      school: { fill: '#243a24', stroke: '#6fae4f' },
       mall: { fill: '#3a3320', stroke: '#b08a2e' },
       restaurant: { fill: '#3d2820', stroke: '#c0673a' },
       nightclub: { fill: '#2f1f3d', stroke: '#9b59d6' },

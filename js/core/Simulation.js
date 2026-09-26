@@ -37,8 +37,11 @@ export class Simulation {
       virulence: e.virulence.default / 100,
       responsibility: e.responsibility.default / 100,
       prudence: e.prudence.default / 100,
+      immunity: e.immunity.default, // jours (0 = à vie)
+      tracing: false,
       closeNightclubs: false,
       closeCommerce: false,
+      closeSchools: false,
       telework: false,
     };
   }
@@ -86,6 +89,8 @@ export class Simulation {
     this.settings[name] = value;
     // Une fermeture fait sortir les occupants sans attendre la fin de leur activité.
     if (this.routine && typeof value === 'boolean') this.routine.tick();
+    // Durée d'immunité changée : elle s'applique aussi aux guéris actuels.
+    if (name === 'immunity' && this.epidemic) this.epidemic.rescheduleImmunity();
   }
 
   /** Réglage du mode zombie (déjà converti : 0..1, px, h, jours ou booléen). */

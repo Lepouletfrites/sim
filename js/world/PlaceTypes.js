@@ -4,6 +4,7 @@ import { CONFIG } from '../config.js';
 export const PlaceType = Object.freeze({
   HOME: 'home',
   WORK: 'work',
+  SCHOOL: 'school',
   MALL: 'mall',
   RESTAURANT: 'restaurant',
   NIGHTCLUB: 'nightclub',
@@ -18,6 +19,7 @@ export const STREET = 'street';
 export const PLACE_LABELS = {
   home: 'Logements',
   work: 'Bureaux',
+  school: 'École',
   mall: 'Centre commercial',
   restaurant: 'Restaurants',
   nightclub: 'Boîte de nuit',
@@ -29,10 +31,18 @@ export const PLACE_LABELS = {
 
 /** Étiquettes courtes affichées sur la carte. */
 export const MAP_LABELS = {
+  school: 'ÉCOLE',
   mall: 'CENTRE CO.',
   restaurant: 'RESTO',
   nightclub: 'CLUB',
 };
+
+/** Horaires d'un type : une ou plusieurs règles { days, slots }, ou null (toujours ouvert). */
+function scheduleOf(type) {
+  const schedule = CONFIG.places.schedule[type];
+  if (!schedule) return null;
+  return Array.isArray(schedule) ? schedule : [schedule];
+}
 
 /**
  * Le lieu est-il ouvert à cet instant ?
@@ -42,19 +52,22 @@ export function isOpen(type, clock, policies) {
   if (policies) {
     if (type === PlaceType.NIGHTCLUB && policies.closeNightclubs) return false;
     if ((type === PlaceType.MALL || type === PlaceType.RESTAURANT) && policies.closeCommerce) return false;
+    if (type === PlaceType.SCHOOL && policies.closeSchools) return false;
   }
-  const schedule = CONFIG.places.schedule[type];
-  if (!schedule) return true; // logements et hôpital : toujours ouverts
+  const rules = scheduleOf(type);
+  if (!rules) return true; // logements et hôpital : toujours ouverts
 
   const hour = clock.hour;
   const weekday = clock.weekday;
-  for (const [open, close] of schedule.slots) {
-    // offset 1 : créneau commencé la veille et qui déborde après minuit
-    for (let offset = 0; offset <= 1; offset++) {
-      const day = (weekday - offset + 7) % 7;
-      if (!schedule.days.includes(day)) continue;
-      const t = hour + 24 * offset;
-      if (t >= open && t < close) return true;
+  for (const rule of rules) {
+    for (const [open, close] of rule.slots) {
+      // offset 1 : créneau commencé la veille et qui déborde après minuit
+      for (let offset = 0; offset <= 1; offset++) {
+        const day = (weekday - offset + 7) % 7;
+        if (!rule.days.includes(day)) continue;
+        const t = hour + 24 * offset;
+        if (t >= open && t < close) return true;
+      }
     }
   }
   return false;
@@ -68,16 +81,18 @@ const formatHour = (h) => {
   return mm ? `${hh}h${String(mm).padStart(2, '0')}` : `${hh}h`;
 };
 
-/** Horaires lisibles, ex. "Ven–Sam 23h–5h". */
-export function describeSchedule(type) {
-  const schedule = CONFIG.places.schedule[type];
-  if (!schedule) return '24h/24';
-  const days = schedule.days;
+function describeRule({ days, slots }) {
   const contiguous = days.every((d, i) => i === 0 || d === days[i - 1] + 1);
   const dayText =
     days.length === 7 ? 'Tous les jours'
-      : contiguous ? `${DAY_SHORT[days[0]]}–${DAY_SHORT[days[days.length - 1]]}`
-        : days.map((d) => DAY_SHORT[d]).join(', ');
-  const slots = schedule.slots.map(([a, b]) => `${formatHour(a)}–${formatHour(b)}`).join(', ');
-  return `${dayText} ${slots}`;
+      : days.length === 1 ? DAY_SHORT[days[0]]
+        : contiguous ? `${DAY_SHORT[days[0]]}–${DAY_SHORT[days[days.length - 1]]}`
+          : days.map((d) => DAY_SHORT[d]).join(', ');
+  return `${dayText} ${slots.map(([a, b]) => `${formatHour(a)}–${formatHour(b)}`).join(', ')}`;
+}
+
+/** Horaires lisibles, ex. "Ven–Sam 23h–5h". */
+export function describeSchedule(type) {
+  const rules = scheduleOf(type);
+  return rules ? rules.map(describeRule).join(' · ') : '24h/24';
 }

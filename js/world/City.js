@@ -107,6 +107,8 @@ export class City {
       for (let k = count(cfg.mallEvery); k > 0; k--) this.buildings[free.shift()].type = PlaceType.MALL;
       const third = Math.floor(free.length / 3);
       take(free.slice(third, 2 * third), count(cfg.nightclubEvery), PlaceType.NIGHTCLUB);
+      // Écoles : bâtiments moyens à grands, répartis (chaque enfant va à la plus proche)
+      take(free.slice(0, Math.max(1, Math.floor(free.length / 2))), count(cfg.schoolEvery), PlaceType.SCHOOL);
       take(free.slice(Math.floor(free.length / 2)), Math.max(2, Math.round(n * cfg.restaurantShare)), PlaceType.RESTAURANT);
       // Bureaux : tirage pondéré par la surface
       const weighted = [...free].sort((a, b) => area(b) * rng.range(0.3, 1.7) - area(a) * rng.range(0.3, 1.7));
@@ -119,10 +121,11 @@ export class City {
       b.index = i;
       // Logements et bureaux accueillent toujours leurs occupants attitrés ;
       // seuls les lieux ouverts au public ont une jauge.
+      // (Les lits de l'hôpital sont comptés par l'Epidemic, selon la population.)
       b.capacity =
-        b.type === PlaceType.HOME || b.type === PlaceType.WORK ? Infinity
-          : b.type === PlaceType.HOSPITAL ? CONFIG.epidemic.hospitalCapacity
-            : Math.max(6, Math.floor(b.w * b.h * cfg.capacityPerArea));
+        b.type === PlaceType.HOME || b.type === PlaceType.WORK || b.type === PlaceType.SCHOOL ||
+        b.type === PlaceType.HOSPITAL ? Infinity
+          : Math.max(6, Math.floor(b.w * b.h * cfg.capacityPerArea));
       // Un bâtiment enclavé (inaccessible depuis la rue) reste décoratif.
       if (this.fieldTo(i) !== null) this.byType[b.type].push(i);
     });
@@ -196,6 +199,29 @@ export class City {
       else hi = mid;
     }
     return list[lo];
+  }
+
+  /**
+   * Bâtiment d'un type donné le plus proche à pied de `from` (ponts et détours compris),
+   * -1 si aucun n'est accessible.
+   */
+  nearestPlaceByPath(type, from) {
+    const start = this.fieldTo(from);
+    if (!start) return -1;
+    const { cellSize: cs, cols } = this.navGrid;
+    const exit = start.exits[0];
+    const cell = Math.floor(exit.y / cs) * cols + Math.floor(exit.x / cs);
+    let best = -1;
+    let bestD = Infinity;
+    for (const i of this.byType[type] ?? []) {
+      const field = this.fieldTo(i);
+      const d = field ? field.dist[cell] : -1;
+      if (d >= 0 && d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
   typeOf(place) {

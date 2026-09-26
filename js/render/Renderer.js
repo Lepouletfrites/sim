@@ -18,7 +18,7 @@ function hash(a, b) {
   return s - Math.floor(s);
 }
 const HEALTH_DRAW_ORDER = [Health.SUSCEPTIBLE, Health.RECOVERED, Health.INCUBATING, Health.SYMPTOMATIC];
-const VENUES = [PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
+const VENUES = [PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
 
 /** Mélange deux couleurs "#rrggbb" (t = 0 -> a, t = 1 -> b). */
 function mixHex(a, b, t) {

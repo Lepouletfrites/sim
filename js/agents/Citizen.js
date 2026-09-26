@@ -67,6 +67,8 @@ export class Citizen {
     this.frailty = 1;     // multiplicateur du risque de forme grave
     this.infectivity = 1; // quantité de virus émise (quelques superpropagateurs)
     this.home = -1;
+    this.household = -1;  // foyer : mêmes logement et vie commune (voir Population)
+    this.friends = [];    // amis (réciproques) : visites, sorties, influence
     this.work = -1;
     this.workStart = 9;
     this.workEnd = 17;
@@ -93,6 +95,14 @@ export class Citizen {
     this.careUntil = 0;
     this.waitingBed = false; // cas grave alité faute de lit à l'hôpital
     this.illnessDuration = 1;
+    this.contagiousLeft = 0; // malade : h de contagiosité restantes (on reste malade après)
+    this.infections = 0;     // infections passées (protègent en partie des formes graves)
+    this.immuneUntil = Infinity; // guéri : protégé jusqu'à cette heure de jeu
+    this.testAt = 0;         // heure du résultat d'un test en cours (0 = aucun)
+    this.confirmed = false;  // cas confirmé par un test
+    this.traced = false;     // isolé comme cas contact
+    this.tracedAt = -Infinity;
+    this.contactLog = null;  // Map(habitant -> heure) des contacts rapprochés quand on est contagieux
     this.pendingDecision = false;
     this.hesitation = 0;
     this.masked = false;
@@ -113,6 +123,9 @@ export class Citizen {
     this.looting = false;   // part piller pour se nourrir
     this.lootTarget = -1;
     this.lootTimer = 0;
+    this.fetching = null;       // parent : enfant qu'il va chercher à l'alerte
+    this.awaitingParent = null; // enfant : parent attendu (il ne bouge pas)
+    this.awaitSince = 0;
 
     // Sectes (voir Cult.js)
     this.gullibility = 0;   // plus il est haut, plus l'habitant se laisse convaincre
@@ -139,7 +152,8 @@ export class Citizen {
 
   get isContagious() {
     return (
-      (this.health === Health.INCUBATING && this.latent <= 0) || this.health === Health.SYMPTOMATIC
+      (this.health === Health.INCUBATING && this.latent <= 0) ||
+      (this.health === Health.SYMPTOMATIC && this.contagiousLeft > 0)
     );
   }
 

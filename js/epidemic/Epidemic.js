@@ -7,7 +7,9 @@ import { ZombieState } from '../zombie/Zombies.js';
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /** Lieux où l'on peut être contaminé (pour la répartition "où se contamine-t-on"). */
-export const CONTAGION_PLACES = [STREET, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
+export const CONTAGION_PLACES = [
+  PlaceType.HOME, PlaceType.SCHOOL, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB, STREET,
+];
 
 /**
  * Épidémie et réactions humaines. Toutes les durées sont en heures de jeu.
@@ -19,7 +21,9 @@ export const CONTAGION_PLACES = [STREET, PlaceType.WORK, PlaceType.MALL, PlaceTy
  * Transmission : uniquement entre deux personnes proches (< contactRadius) dans
  * le MÊME lieu. Probabilité par heure de contact :
  *   curseur × facteur du lieu × infectiosité de l'émetteur × masques
- *  - lieu : nul à domicile et à l'hôpital, réduit dans la rue, élevé en boîte
+ *  - lieu : nul à l'hôpital, réduit dans la rue, élevé en boîte
+ *  - à domicile : seulement entre membres du même foyer, sans condition de distance
+ *  - un malade n'est contagieux que les premiers jours de ses symptômes
  *  - infectiosité individuelle très dispersée (superpropagateurs), réduite chez
  *    les asymptomatiques
  *  - masque : réduit l'émission et, dans une moindre mesure, la réception
@@ -74,8 +78,10 @@ export class Epidemic {
     this.recount();
   }
 
+  /** Lits d'hôpital : proportionnels à la population (une petite ville a un petit hôpital). */
   get hospitalCapacity() {
-    return CONFIG.epidemic.hospitalCapacity;
+    const cfg = CONFIG.epidemic;
+    return Math.max(cfg.minBeds, Math.round(this.population.count * cfg.bedsPerCapita));
   }
 
   /** Part des personnes sorties de la maladie qui en sont mortes. */
@@ -153,6 +159,13 @@ export class Epidemic {
       c.masked = false;
       c.speedFactor = 1;
       c.extraSpace = 0;
+      c.infections = 0;
+      c.immuneUntil = Infinity;
+      c.testAt = 0;
+      c.confirmed = false;
+      c.traced = false;
+      c.tracedAt = -Infinity;
+      c.contactLog = null;
       this.routine.replan(c);
     }
     this.resetState();
@@ -201,15 +214,22 @@ export class Epidemic {
     const confineChance = s.prudence * this.awareness * cfg.confineRate * hours;
     // Lits libres, en comptant ceux déjà promis aux malades en route.
     this.freeBeds = this.city.hospitalIndex < 0 ? 0
-      : cfg.hospitalCapacity - this.counts.hospitalized - this.counts.toHospital;
+      : this.hospitalCapacity - this.counts.hospitalized - this.counts.toHospital;
 
     for (const c of this.population.citizens) {
       if (!c.alive || c.zombie >= ZombieState.ZOMBIE) continue;
       c.extraSpace = spacing * c.caution;
       c.masked = c.caution > 1 - maskIntent; // les plus prudents s'y mettent en premier
 
+      if (c.testAt > 0 && now >= c.testAt) this.runTest(c);
+
       // --- Évolution de la maladie
-      if (c.health === Health.INCUBATING) {
+      if (c.health === Health.RECOVERED) {
+        if (now >= c.immuneUntil) {
+          c.health = Health.SUSCEPTIBLE; // l'immunité s'est estompée
+          this.lostImmunity++;
+        }
+      } else if (c.health === Health.INCUBATING) {
         c.latent -= hours;
         c.healthTimer -= hours;
         if (c.healthTimer <= 0) {
@@ -218,6 +238,7 @@ export class Epidemic {
         }
       } else if (c.health === Health.SYMPTOMATIC) {
         c.healthTimer -= hours;
+        c.contagiousLeft -= hours;
         // Forme grave : risque de décès réparti sur toute la durée de la maladie.
         if (c.severe && rng.chance(this.deathChance(c, hours))) {
           this.die(c);
@@ -245,6 +266,7 @@ export class Epidemic {
       if (c.care === Care.CONFINED) {
         if (now >= c.careUntil) {
           c.care = Care.NONE;
+          c.traced = false;
           this.routine.replan(c);
         }
       } else if (
@@ -288,25 +310,49 @@ export class Epidemic {
     pending.length = 0;
     pendingPlace.length = 0;
 
+    const household = CONFIG.places.transmission.household;
+    const isolated = CONFIG.places.transmission.isolatedAtHome;
+    const visit = CONFIG.places.transmission.visit;
+    const tracing = this.settings.tracing;
+    const now = this.clock.time;
+
     for (let i = 0; i < n; i++) {
       const c = citizens[i];
       if (!c.alive || !c.isContagious || c.zombie >= ZombieState.ZOMBIE) continue;
-      const placeFactor = c.place < 0 ? streetFactor : this.placeFactor[c.place];
-      if (placeFactor <= 0) continue;
-      const emission =
-        placeFactor * c.infectivity *
-        (c.asymptomatic ? cfg.asymptomaticInfectivity : 1) *
-        (c.masked ? cfg.maskEmission : 1);
+      const own = c.infectivity * (c.asymptomatic ? cfg.asymptomaticInfectivity : 1);
+
+      // À la maison : on contamine son foyer (repas, salle de bains…), à toute distance,
+      // un peu moins si l'on s'isole dans sa chambre. Jamais les voisins de palier.
+      if (c.place >= 0 && c.place === c.home && household > 0) {
+        const dose = household * own * (c.care === Care.QUARANTINE ? isolated : 1);
+        for (const o of this.population.householdOf(c)) {
+          if (o === c || o.place !== c.place || o.health !== Health.SUSCEPTIBLE || o.zombie >= ZombieState.ZOMBIE) continue;
+          if (rng.chance(1 - Math.exp(logKeep * dose))) {
+            pending.push(o);
+            pendingPlace.push(PlaceType.HOME);
+          }
+        }
+      }
+
+      // Dans un logement, seuls les visiteurs (amis de passage) se contaminent à proximité ;
+      // entre voisins de palier, rien.
+      const atHome = c.place >= 0 && city.buildings[c.place].type === PlaceType.HOME;
+      const placeFactor = c.place < 0 ? streetFactor : atHome ? visit : this.placeFactor[c.place];
+      if (placeFactor <= 0 && !tracing) continue;
+      const emission = placeFactor * own * (c.masked ? cfg.maskEmission : 1);
 
       const count = grid.query(c.x, c.y, neighbors);
       for (let k = 0; k < count; k++) {
         const j = neighbors[k];
         if (j >= n) continue;
         const o = citizens[j];
-        if (o.health !== Health.SUSCEPTIBLE || o.place !== c.place || o.zombie >= ZombieState.ZOMBIE) continue;
+        if (o === c || !o.alive || o.place !== c.place || o.zombie >= ZombieState.ZOMBIE) continue;
         const dx = o.x - c.x;
         const dy = o.y - c.y;
         if (dx * dx + dy * dy >= r2) continue;
+        if (tracing) this.logContact(c, o, now, hours);
+        if (o.health !== Health.SUSCEPTIBLE || placeFactor <= 0) continue;
+        if (atHome && c.place === c.home && o.place === o.home) continue; // deux résidents
         const dose = emission * (o.masked ? cfg.maskReception : 1);
         if (rng.chance(1 - Math.exp(logKeep * dose))) {
           pending.push(o);
@@ -318,15 +364,122 @@ export class Epidemic {
     for (let k = 0; k < pending.length; k++) this.infect(pending[k], pendingPlace[k]);
   }
 
+  // ------------------------------------------------------------ Dépistage et traçage
+
+  /**
+   * Carnet de contacts d'un porteur contagieux : qui a-t-il approché, quand, et combien
+   * de temps au total (seul un contact prolongé fait un "cas contact").
+   */
+  logContact(c, o, now, hours) {
+    const log = c.contactLog ?? (c.contactLog = new Map());
+    const entry = log.get(o);
+    if (entry) {
+      entry.t = now;
+      entry.h += hours;
+      return;
+    }
+    log.set(o, { t: now, h: hours });
+    if (log.size > CONFIG.epidemic.tracing.maxContacts) {
+      const limit = now - CONFIG.epidemic.tracing.memory;
+      for (const [who, e] of log) if (e.t < limit) log.delete(who);
+      // Toujours trop : on oublie les plus anciens (ordre d'insertion).
+      for (const who of log.keys()) {
+        if (log.size <= CONFIG.epidemic.tracing.maxContacts * 0.75) break;
+        log.delete(who);
+      }
+    }
+  }
+
+  /** Capacité du laboratoire, proportionnelle à la population. */
+  get testsPerDay() {
+    const cfg = CONFIG.epidemic.testing;
+    return Math.max(cfg.minPerDay, Math.round(this.population.count * cfg.perCapitaPerDay));
+  }
+
+  scheduleTest(c) {
+    if (c.testAt > 0 || c.confirmed) return;
+    c.testAt = this.clock.time + this.rng.range(...CONFIG.epidemic.testing.delay);
+    this.testing.pending++;
+  }
+
+  /** Résultat d'un test : positif -> isolement et recherche de ses contacts. */
+  runTest(c) {
+    const t = this.testing;
+    if (this.clock.day !== t.day) {
+      t.day = this.clock.day;
+      t.today = 0;
+    }
+    if (t.today >= this.testsPerDay) {
+      c.testAt = this.clock.time + CONFIG.epidemic.testing.backlogDelay; // labo saturé
+      t.saturated = true;
+      return;
+    }
+    t.today++;
+    t.done++;
+    t.pending = Math.max(0, t.pending - 1);
+    c.testAt = 0;
+    const positive = (c.health === Health.INCUBATING && c.latent <= 0) || c.health === Health.SYMPTOMATIC;
+    if (!positive) return;
+    t.confirmed++;
+    c.confirmed = true;
+    // Un porteur sans symptômes qui se sait positif s'isole (s'il est civique).
+    if (c.health === Health.INCUBATING && this.complies(c) && (c.care === Care.NONE || c.care === Care.CONFINED)) {
+      c.care = Care.QUARANTINE;
+      this.routine.replan(c);
+    }
+    this.trace(c);
+  }
+
+  /** Nouvelle durée d'immunité : recalcule la fin de protection des guéris. */
+  rescheduleImmunity() {
+    const days = this.settings.immunity;
+    const now = this.clock.time;
+    for (const c of this.population.citizens) {
+      if (c.health !== Health.RECOVERED) continue;
+      c.immuneUntil = days > 0 ? now + days * 24 * this.rng.range(0.3, 1) : Infinity;
+    }
+  }
+
+  complies(c) {
+    return c.civism > 1 - this.settings.responsibility;
+  }
+
+  /** Cas contacts : le foyer et les personnes croisées de près ces derniers jours. */
+  trace(c) {
+    const now = this.clock.time;
+    const cfg = CONFIG.epidemic.tracing;
+    const contacts = new Set(this.population.householdOf(c));
+    if (c.contactLog) {
+      for (const [o, e] of c.contactLog) if (now - e.t <= cfg.memory && e.h >= cfg.minExposure) contacts.add(o);
+      c.contactLog.clear();
+    }
+    contacts.delete(c);
+    for (const o of contacts) {
+      if (!o.alive || o.zombie >= ZombieState.ZOMBIE || o.tracedAt > now - 24) continue;
+      o.tracedAt = now;
+      this.testing.contacts++;
+      this.scheduleTest(o);
+      if (!this.complies(o) || o.care !== Care.NONE) continue;
+      o.care = Care.CONFINED;
+      o.careUntil = now + cfg.quarantine;
+      o.traced = true;
+      this.routine.replan(o);
+    }
+  }
+
   // ------------------------------------------------------------ Transitions
 
   onSymptoms(c) {
     const cfg = CONFIG.epidemic;
     const range = ([min, max]) => this.rng.range(min, max);
     c.health = Health.SYMPTOMATIC;
-    c.severe = this.rng.chance(clamp01(this.settings.virulence * c.frailty));
+    // Une infection passée protège en partie des formes graves.
+    const protection = cfg.reinfectionSeverity ** c.infections;
+    c.severe = this.rng.chance(clamp01(this.settings.virulence * c.frailty * protection));
+    if (this.settings.tracing && this.rng.chance(cfg.testing.chance * (0.5 + 0.5 * c.civism))) this.scheduleTest(c);
     c.healthTimer = range(c.severe ? cfg.severeIllness : cfg.illness);
     c.illnessDuration = c.healthTimer;
+    c.contagiousLeft = range(cfg.symptomaticContagious);
     c.speedFactor = c.severe ? cfg.severeSpeedFactor : cfg.sickSpeedFactor;
     // Les plus civiques réagissent vite, les autres temporisent.
     c.pendingDecision = true;
@@ -379,6 +532,11 @@ export class Epidemic {
 
   recover(c) {
     c.health = Health.RECOVERED;
+    c.infections++;
+    c.confirmed = false;
+    // Immunité temporaire, plus ou moins durable selon les personnes (0 = à vie).
+    const days = this.settings.immunity;
+    c.immuneUntil = days > 0 ? this.clock.time + days * 24 * this.rng.range(0.6, 1.4) : Infinity;
     c.healthTimer = 0;
     c.severe = false;
     c.waitingBed = false;
@@ -421,7 +579,7 @@ export class Epidemic {
     for (const key of [
       'alive', 'susceptible', 'carriers', 'symptomatic', 'sickOut', 'toHospital',
       'hospitalized', 'quarantined', 'bedridden', 'waitingBed', 'confined', 'severe', 'masked',
-      'recovered', 'dead',
+      'recovered', 'dead', 'tracedIsolated', 'reinfected',
     ]) counts[key] = 0;
     const byPlace = this.byPlace;
     for (const key of [STREET, ...Object.values(PlaceType)]) byPlace[key] = 0;
@@ -437,7 +595,11 @@ export class Epidemic {
       counts.alive++;
       byPlace[this.city.typeOf(c.place)]++;
       if (c.masked) counts.masked++;
-      if (c.care === Care.CONFINED) counts.confined++;
+      if (c.care === Care.CONFINED) {
+        if (c.traced) counts.tracedIsolated++;
+        else counts.confined++;
+      }
+      if (c.infections > 0 && (c.health === Health.INCUBATING || c.health === Health.SYMPTOMATIC)) counts.reinfected++;
 
       switch (c.health) {
         case Health.SUSCEPTIBLE: counts.susceptible++; break;
@@ -473,6 +635,8 @@ export class Epidemic {
     this.deathMarks = [];
     this.infectionsByPlace = {};
     for (const place of CONTAGION_PLACES) this.infectionsByPlace[place] = 0;
+    this.lostImmunity = 0;
+    this.testing = { done: 0, confirmed: 0, contacts: 0, pending: 0, today: 0, day: -1, saturated: false };
   }
 
   sample() {

@@ -30,7 +30,7 @@ export class CultPanel {
     };
     for (const key of [
       'members', 'zealots', 'curious', 'burning', 'insecurity', 'insecurity2', 'fires', 'ruins',
-      'assaults', 'killedViolence', 'killedFire', 'arrests', 'jailed',
+      'assaults', 'killedViolence', 'killedFire', 'arrests', 'jailed', 'investigations', 'moved',
     ]) {
       this.el.stats[key] = $(`#cstat-${key}`);
     }
@@ -87,6 +87,8 @@ export class CultPanel {
     s.killedFire.textContent = t.killed.fire;
     s.arrests.textContent = t.arrests;
     s.jailed.textContent = c.jailed;
+    s.investigations.textContent = t.investigations;
+    s.moved.textContent = t.moved;
 
     this.updateStatus(cult);
     this.updateList(cult);
@@ -143,7 +145,7 @@ export class CultPanel {
       else if (k.prophecy === 'fulfilled') prophecy = 'Prophétie réalisée !';
       return {
         k,
-        key: [k.name, k.dissolved, guru, k.stage, k.members, k.zealots, k.curious, Math.round(k.funds / 50), hq, k.jailed, prophecy, k.incidents].join('|'),
+        key: [k.name, k.dissolved, guru, k.stage, k.members, k.zealots, k.curious, Math.round(k.funds / 50), hq, k.jailed, prophecy, k.incidents, k.reports].join('|'),
         guru, hq, prophecy,
       };
     });
@@ -186,7 +188,8 @@ export class CultPanel {
         const numbers = document.createElement('p');
         numbers.className = 'cults__numbers';
         numbers.textContent = `${plural(k.members, 'fidèle')} (${k.zealots} fanatique${k.zealots > 1 ? 's' : ''}` +
-          `${k.jailed ? `, ${k.jailed} en prison` : ''}) · ${k.curious} curieux · ${plural(k.incidents, 'méfait')}`;
+          `${k.jailed ? `, ${k.jailed} en prison` : ''}) · ${k.curious} curieux · ${plural(k.incidents, 'méfait')}` +
+          ` · ${plural(k.reports, 'signalement')}`;
         li.appendChild(numbers);
       }
       if (prophecy && !k.dissolved) {

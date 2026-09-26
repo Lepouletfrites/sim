@@ -11,10 +11,11 @@ const percent = (v) => `${Math.round(v)} %`;
 
 /** Curseurs de l'épidémie : clé du réglage = suffixe de l'id du slider. */
 const EPIDEMIC_SLIDERS = ['transmission', 'virulence', 'responsibility', 'prudence'];
-const POLICIES = ['closeNightclubs', 'closeCommerce', 'telework'];
+const POLICIES = ['closeNightclubs', 'closeCommerce', 'closeSchools', 'telework', 'tracing'];
+const formatDays = (v) => (v === 0 ? 'à vie' : `${v} j`);
 const CITY_SLIDERS = ['density', 'chaos', 'green'];
 const PLACES_SHOWN = [
-  PlaceType.HOME, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT,
+  PlaceType.HOME, PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.RESTAURANT,
   PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, PlaceType.TEMPLE, STREET,
 ];
 /** Action du clic sur la carte (les boutons [data-click] de tous les onglets restent synchronisés). */
@@ -28,7 +29,7 @@ const CLICK_HINTS = {
 /** Compteurs affichés tels quels : clé de `epidemic.counts` = suffixe de l'id. */
 const COUNTS = [
   'susceptible', 'carriers', 'sickOut', 'recovered', 'toHospital',
-  'quarantined', 'bedridden', 'waitingBed', 'severe', 'masked', 'confined',
+  'quarantined', 'bedridden', 'waitingBed', 'severe', 'masked', 'confined', 'tracedIsolated', 'reinfected',
 ];
 /** Segments de la barre d'état de santé, dans l'ordre d'évolution de la maladie. */
 const HEALTH_SEGMENTS = [
@@ -219,6 +220,13 @@ export class UI {
       });
     }
 
+    const immunity = $('#slider-immunity');
+    immunity.addEventListener('input', () => {
+      const value = Number(immunity.value);
+      $('#value-immunity').textContent = formatDays(value);
+      onSetting('immunity', value);
+    });
+
     for (const key of POLICIES) {
       const checkbox = $(`#policy-${key}`);
       checkbox.addEventListener('change', () => onSetting(key, checkbox.checked));
@@ -342,6 +350,7 @@ export class UI {
     init('green', city.green, 5, percent);
     $('#toggle-river').checked = city.river;
     for (const key of EPIDEMIC_SLIDERS) init(key, epidemic[key], 1, percent);
+    init('immunity', epidemic.immunity, epidemic.immunity.step, formatDays);
   }
 
   /** Réglages de forme de la ville (densité 1..10, désordre et verdure 0..1, rivière). */
@@ -412,6 +421,18 @@ export class UI {
     this.el.hospitalized.textContent = `${c.hospitalized} / ${capacity}`;
     this.el.hospitalMeter.style.width = `${Math.min(100, (100 * c.hospitalized) / capacity)}%`;
     this.el.hospitalMeter.classList.toggle('is-full', c.hospitalized >= capacity);
+
+    // Dépistage et immunité
+    const t = epidemic.testing;
+    $('#stat-testsDone').textContent = t.done;
+    $('#stat-testsConfirmed').textContent = t.confirmed;
+    $('#stat-testsContacts').textContent = t.contacts;
+    $('#stat-testsCapacity').textContent = `${epidemic.testsPerDay} tests / jour`;
+    $('#stat-lostImmunity').textContent = epidemic.lostImmunity;
+    $('#testing-note').textContent = !simulation.settings.tracing
+      ? 'Activez « Dépistage et traçage » dans les réglages.'
+      : t.day === simulation.clock.day && t.today >= epidemic.testsPerDay ? 'Laboratoire saturé : les résultats prennent du retard.'
+        : `${t.pending} test${t.pending > 1 ? 's' : ''} en attente de résultat.`;
 
     // Onglet Réglages
     const awareness = epidemic.awareness * 100;
