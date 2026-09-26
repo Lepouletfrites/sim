@@ -117,15 +117,15 @@
     <aside class="sidebar">
       <header class="sidebar__header">
         <h1>CitySim</h1>
-        <p>Ville, virus et zombies</p>
+        <p>Simulation urbaine</p>
       </header>
 
       <nav class="tabs" role="tablist" aria-label="Sections du panneau">
-        <button type="button" class="tabs__btn" role="tab" id="tab-btn-virus" aria-controls="tab-virus" data-tab="virus">Virus</button>
+        <button type="button" class="tabs__btn tabs__btn--virus" role="tab" id="tab-btn-virus" aria-controls="tab-virus" data-tab="virus">Virus</button>
         <button type="button" class="tabs__btn tabs__btn--zombie" role="tab" id="tab-btn-zombies" aria-controls="tab-zombies" data-tab="zombies">Zombies</button>
         <button type="button" class="tabs__btn tabs__btn--cult" role="tab" id="tab-btn-cult" aria-controls="tab-cult" data-tab="cult">Sectes</button>
         <button type="button" class="tabs__btn tabs__btn--crime" role="tab" id="tab-btn-crime" aria-controls="tab-crime" data-tab="crime">Crime</button>
-        <button type="button" class="tabs__btn" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
+        <button type="button" class="tabs__btn tabs__btn--city" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
       </nav>
 
       <div class="tabpanels">
@@ -513,7 +513,7 @@
             <div class="card">
               <h3>Déclencher</h3>
               <div class="actions">
-                <button type="button" class="btn btn--cult" id="btn-guru">Faire apparaître un gourou</button>
+                <button type="button" class="btn btn--cult" id="btn-guru">Nouveau gourou</button>
                 <button type="button" class="btn" id="btn-police-raid">Descente de police</button>
               </div>
               <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
@@ -740,7 +740,7 @@
               <h3>Déclencher</h3>
               <div class="actions">
                 <button type="button" class="btn btn--crime" id="btn-heist">Braquage de banque</button>
-                <button type="button" class="btn" id="btn-reset-crime">Remettre à zéro</button>
+                <button type="button" class="btn" id="btn-reset-crime">Réinitialiser</button>
               </div>
               <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
               <div class="segmented" role="radiogroup" aria-label="Action du clic sur la carte">

@@ -14,7 +14,7 @@
   --danger: #e74c3c;
   --warning: #f1c40f;
   --radius: 10px;
-  --sidebar-width: 340px;
+  --sidebar-width: 372px;
   --toolbar-height: 56px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
@@ -148,7 +148,8 @@ kbd {
 
 .toolbar__kpis {
   display: flex;
-  gap: 20px;
+  gap: 18px;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -338,32 +339,70 @@ kbd {
   color: var(--text-muted);
 }
 
+/* Onglets principaux : colonnes égales, pastille de couleur au-dessus du libellé */
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin: 0 12px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
 }
 
 .tabs__btn {
-  padding: 10px 0;
-  font-size: 13px;
+  --tab-color: var(--accent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 2px 7px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 8px;
   background: none;
   color: var(--text-muted);
   cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.tabs__btn::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tab-color);
+  opacity: 0.45;
+  transition: opacity 0.15s, box-shadow 0.15s;
 }
 
 .tabs__btn:hover {
   color: var(--text);
+  background: var(--bg-hover);
 }
 
 .tabs__btn[aria-selected="true"] {
   color: var(--text);
-  border-bottom-color: var(--accent);
+  background: var(--bg-hover);
+  box-shadow: inset 0 -2px 0 var(--tab-color);
 }
+
+.tabs__btn[aria-selected="true"]::before {
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tab-color) 25%, transparent);
+}
+
+.tabs__btn--virus { --tab-color: #e74c3c; }
+.tabs__btn--zombie { --tab-color: #7bd13a; }
+.tabs__btn--cult { --tab-color: #d35cff; }
+.tabs__btn--crime { --tab-color: #ff4d6d; }
+.tabs__btn--city { --tab-color: #3498db; }
 
 .tabpanels {
   flex: 1 1 auto;
@@ -375,6 +414,11 @@ kbd {
   display: grid;
   gap: 12px;
   padding: 0 12px 18px;
+}
+
+.tabpanels {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .tabpanel[hidden],
@@ -401,7 +445,9 @@ kbd {
 }
 
 .subtabs__btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  white-space: nowrap;
   padding: 6px 10px;
   font-size: 12px;
   font-weight: 600;
@@ -469,10 +515,11 @@ kbd {
   color: var(--text-muted);
 }
 
+/* En-tête de graphique : le titre, puis la légende en dessous (jamais écrasés côte à côte) */
 .card__head {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -609,16 +656,27 @@ kbd {
 }
 
 /* Actions */
+/* Paires de boutons : même largeur, même hauteur, libellés centrés */
 .actions {
   display: grid;
-  grid-template-columns: 1.4fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
+.actions .btn {
+  min-height: 42px;
+  padding-inline: 8px;
+}
+
 .btn {
-  padding: 10px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 12px;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: transparent;
@@ -1028,10 +1086,6 @@ input[type="range"] {
 
 /* =============================== Zombies =============================== */
 
-.tabs__btn--zombie[aria-selected="true"] {
-  border-bottom-color: #7bd13a;
-}
-
 .dot--zombie {
   background: #7bd13a;
   box-shadow: 0 0 0 1.5px #23400c;
@@ -1080,7 +1134,7 @@ input[type="range"] {
 /* Choix exclusif (action du clic) */
 .segmented {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding: 3px;
   gap: 2px;
   border-radius: 8px;
@@ -1089,6 +1143,10 @@ input[type="range"] {
 }
 
 .segmented button {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 7px 4px;
   font-size: 12px;
   font-weight: 600;
@@ -1294,9 +1352,6 @@ input[type="range"] {
 
 /* ================================ Sectes ================================ */
 
-.tabs__btn--cult[aria-selected="true"] {
-  border-bottom-color: #d35cff;
-}
 
 .mini--cult {
   --mark: #d35cff;
@@ -1427,9 +1482,6 @@ input[type="range"] {
 
 /* ================================ Crime ================================= */
 
-.tabs__btn--crime[aria-selected="true"] {
-  border-bottom-color: #ff4d6d;
-}
 
 .mini--crime {
   --mark: #ff4d6d;
@@ -1488,9 +1540,34 @@ input[type="range"] {
 
 /* ============================== Responsive ============================== */
 
-@media (max-width: 1100px) {
+/* Barre d'outils : on retire d'abord le nombre d'habitants, puis on resserre */
+@media (max-width: 1180px) {
   .toolbar__kpis .mini:first-child {
     display: none;
+  }
+}
+
+@media (max-width: 1040px) {
+  .toolbar {
+    gap: 10px;
+    padding: 0 12px;
+  }
+
+  .clock {
+    min-width: 0;
+  }
+
+  .speed__btn {
+    min-width: 30px;
+    padding: 6px 5px;
+  }
+
+  .toolbar__kpis {
+    gap: 12px;
+  }
+
+  .mini span {
+    font-size: 9.5px;
   }
 }
 
