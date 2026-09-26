@@ -3,6 +3,8 @@ import { EpidemicChart, CHART_BANDS } from './EpidemicChart.js';
 import { ZombiePanel } from './ZombiePanel.js';
 import { CultPanel } from './CultPanel.js';
 import { CrimePanel } from './CrimePanel.js';
+import { OverviewPanel } from './OverviewPanel.js';
+import { renderLog } from './LogList.js';
 import { PlaceType, STREET, PLACE_LABELS, describeSchedule, isOpen } from '../world/PlaceTypes.js';
 import { CONTAGION_PLACES } from '../epidemic/Epidemic.js';
 import { Health } from '../agents/Citizen.js';
@@ -121,6 +123,8 @@ export class UI {
     onResetCrime,
   }) {
     this.crimePanel = new CrimePanel({ onSetting: onCrimeSetting, onHeist, onReset: onResetCrime });
+    this.overview = new OverviewPanel({ onOpenTab: (tab, subtab) => this.openTab(tab, subtab) });
+    this.virusLogVersion = -1;
     this.zombiePanel = new ZombiePanel({
       onSetting: onZombieSetting,
       onRelease: onReleaseZombie,
@@ -257,6 +261,12 @@ export class UI {
   }
 
   // ------------------------------------------------------------ Construction
+
+  /** Ouvre un onglet principal (et, au besoin, un de ses sous-onglets). */
+  openTab(tab, subtab = null) {
+    document.querySelector(`.tabs [data-tab="${tab}"]`)?.click();
+    if (subtab) document.querySelector(`.subtabs [data-subtab="${subtab}"]`)?.click();
+  }
 
   /** Onglets principaux et sous-onglets de chaque section. */
   setupTabs() {
@@ -494,6 +504,16 @@ export class UI {
       this.el.kpiCrimeBox.hidden = recent === 0;
       this.el.kpiCrime.textContent = recent;
       this.crimePanel.update(crime, simulation.economy);
+    }
+
+    // Journal de l'épidémie, vue d'ensemble et fil d'actualité commun
+    const news = simulation.news;
+    if (news && simulation.population) {
+      if (news.version !== this.virusLogVersion) {
+        this.virusLogVersion = news.version;
+        renderLog($('#virus-log'), news.items.filter((n) => n.source === 'virus').slice(0, 40));
+      }
+      this.overview.update(simulation);
     }
   }
 

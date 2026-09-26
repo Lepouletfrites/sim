@@ -75,8 +75,59 @@ export class Epidemic {
 
     this.counts = {};
     this.byPlace = {};
+    this.news = null; // fil d'actualité (branché par la Simulation)
     this.resetState();
     this.recount();
+  }
+
+  log(text, kind = 'info') {
+    if (this.news) this.news.push('virus', text, kind);
+  }
+
+  /** Moments clés de l'épidémie, publiés dans le fil d'actualité. */
+  watchMilestones() {
+    const c = this.counts;
+    const w = this.watch;
+    const active = c.carriers + c.symptomatic;
+    const share = active / Math.max(1, c.alive);
+
+    if (active > 0 && !w.wave) {
+      w.wave = true;
+      w.waves++;
+      w.level = 0;
+      if (w.waves > 1) this.log(`Nouvelle vague : le virus circule de nouveau (vague n° ${w.waves}).`, 'bad');
+    } else if (active === 0 && w.wave) {
+      w.wave = false;
+      this.log(`Plus aucun cas actif : la vague s'éteint (${c.dead} décès au total).`, 'good');
+    }
+    const levels = [0.05, 0.15, 0.3];
+    while (w.level < levels.length && share >= levels[w.level]) {
+      this.log(`${Math.round(levels[w.level] * 100)} % de la ville est infectée.`, 'bad');
+      w.level++;
+    }
+
+    const full = c.hospitalized + c.toHospital >= this.hospitalCapacity;
+    if (full && !w.hospitalFull) {
+      w.hospitalFull = true;
+      this.log('L\'hôpital est saturé : les cas graves restent alités chez eux, sans soins.', 'bad');
+    } else if (!full && w.hospitalFull && c.hospitalized < this.hospitalCapacity * 0.8) {
+      w.hospitalFull = false;
+      this.log('L\'hôpital respire : des lits se libèrent.', 'good');
+    }
+
+    for (const n of [1, 10, 50, 100]) {
+      if (c.dead >= n && w.deaths < n) {
+        w.deaths = n;
+        this.log(n === 1 ? 'Premier décès lié au virus.' : `${n} décès liés au virus.`, 'bad');
+      }
+    }
+
+    if (this.awareness > 0.5 && !w.worried) {
+      w.worried = true;
+      this.log('Inquiétude générale : masques, distanciation et confinements volontaires se généralisent.', 'info');
+    } else if (this.awareness < 0.2 && w.worried) {
+      w.worried = false;
+    }
   }
 
   /** Lits d'hôpital : proportionnels à la population (une petite ville a un petit hôpital). */
@@ -105,6 +156,7 @@ export class Epidemic {
     if (c.asymptomatic) c.healthTimer = c.latent + range(cfg.asymptomaticCarriage);
     if (place !== null && place in this.infectionsByPlace) this.infectionsByPlace[place]++;
     if (!this.started) {
+      this.log('Premier cas : un habitant est contaminé, le virus commence à circuler.', 'bad');
       this.started = true;
       this.startTime = this.clock.time;
       this.recount();
@@ -184,6 +236,7 @@ export class Epidemic {
     this.transmit(hours);
     this.ageDeathMarks(hours);
     this.recount();
+    if (this.started) this.watchMilestones();
 
     if (this.started) {
       this.sampleTimer += hours;
@@ -413,6 +466,10 @@ export class Epidemic {
     if (t.today >= this.testsPerDay) {
       c.testAt = this.clock.time + CONFIG.epidemic.testing.backlogDelay; // labo saturé
       t.saturated = true;
+      if (this.watch.labDay !== t.day) {
+        this.watch.labDay = t.day;
+        this.log('Laboratoire saturé : les résultats des tests prennent du retard.', 'bad');
+      }
       return;
     }
     t.today++;
@@ -638,6 +695,7 @@ export class Epidemic {
     for (const place of CONTAGION_PLACES) this.infectionsByPlace[place] = 0;
     this.lostImmunity = 0;
     this.testing = { done: 0, confirmed: 0, contacts: 0, pending: 0, today: 0, day: -1, saturated: false };
+    this.watch = { wave: false, waves: 0, level: 0, hospitalFull: false, deaths: 0, worried: false, labDay: -1 };
   }
 
   sample() {

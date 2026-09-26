@@ -110,6 +110,8 @@ export class Cult {
     this.settings = settings;
     this.epidemic = epidemic;
     this.zombies = zombies;
+    this.economy = null; // branché par la Simulation : la précarité rend vulnérable
+    this.news = null;
     this.rng = new Random(seed ^ 0x3c6ef372);
     this.buffer = new Int32Array(512);
     this.fires = new Fires(this);
@@ -455,17 +457,28 @@ export class Cult {
   boost(cult) {
     let boost = cult.prophecyBoost;
     if (this.settings.fearBoost) {
-      boost *= 1 + 1.5 * this.epidemic.awareness + (this.zombies.alarm ? 1.5 : 0) + 0.5 * this.insecurity;
+      // Épidémie, zombies, et insécurité (sectes comme délinquance) : la peur fait recette.
+      boost *= 1 + 1.5 * this.epidemic.awareness + (this.zombies.alarm ? 1.5 : 0) + 0.5 * this.routine.insecurity;
     }
     return boost;
   }
 
-  /** 0 = imperméable, sinon 0,25..1 selon la crédulité de l'habitant. */
+  /**
+   * 0 = imperméable, sinon 0,25..1 selon la crédulité de l'habitant. La précarité et le
+   * chômage rendent plus vulnérable : les sectes promettent un toit, un sens, une famille.
+   */
   receptivity(o) {
+    if (o.age === 'child') return 0;
+    const cfg = CONFIG.cult;
     const credulity = this.settings.credulity;
     const floor = 1 - credulity;
-    if (credulity <= 0 || o.gullibility <= floor) return 0;
-    const r = 0.25 + (0.75 * (o.gullibility - floor)) / credulity;
+    let g = o.gullibility;
+    if (this.economy) {
+      if (this.economy.isPoor(o)) g += cfg.povertyGullibility;
+      if (o.job >= 0 && o.work < 0) g += cfg.joblessGullibility;
+    }
+    if (credulity <= 0 || g <= floor) return 0;
+    const r = 0.25 + (0.75 * Math.min(1, (g - floor) / credulity));
     return o.apostate ? r * 0.3 : r;
   }
 
@@ -1493,6 +1506,7 @@ export class Cult {
     this.events.unshift({ when: `J${clock.day} ${clock.format().split(' ')[1]}`, text, kind });
     if (this.events.length > CONFIG.cult.maxEvents) this.events.length = CONFIG.cult.maxEvents;
     this.eventsVersion++;
+    if (this.news) this.news.push('cult', text, kind);
   }
 
   logOnce(key, text, kind) {

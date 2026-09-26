@@ -871,6 +871,7 @@ export class Zombies {
     this.events.unshift({ when: `J${clock.day} ${clock.format().split(' ')[1]}`, text, kind });
     if (this.events.length > CONFIG.zombie.maxEvents) this.events.length = CONFIG.zombie.maxEvents;
     this.eventsVersion++;
+    if (this.news) this.news.push('zombies', text, kind);
   }
 
   logOnce(key, text, kind) {

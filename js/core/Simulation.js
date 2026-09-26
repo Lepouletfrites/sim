@@ -7,6 +7,16 @@ import { Zombies, defaultZombieSettings } from '../zombie/Zombies.js';
 import { Cult, defaultCultSettings } from '../cult/Cult.js';
 import { Economy } from '../crime/Economy.js';
 import { Crime, defaultCrimeSettings } from '../crime/Crime.js';
+import { News } from './News.js';
+
+/** Libellés des mesures sanitaires, pour le fil d'actualité. */
+const POLICY_NEWS = {
+  closeNightclubs: ['Les boîtes de nuit ferment.', 'Les boîtes de nuit rouvrent.'],
+  closeCommerce: ['Commerces, bars et restaurants ferment.', 'Commerces, bars et restaurants rouvrent.'],
+  closeSchools: ['Les écoles ferment.', 'Les écoles rouvrent.'],
+  telework: ['Le télétravail devient obligatoire.', 'Fin du télétravail obligatoire.'],
+  tracing: ['Dépistage et traçage des contacts mis en place.', 'Fin du dépistage et du traçage.'],
+};
 
 /**
  * Orchestre le temps simulé : timeScale + accumulateur à pas fixe.
@@ -29,6 +39,7 @@ export class Simulation {
     this.economy = null;
     this.crime = null;
     this.crimeSettings = defaultCrimeSettings();
+    this.news = new News(this.clock);
     this.timeScale = CONFIG.simulation.defaultTimeScale;
     this.accumulator = 0;
     this.tickTimer = 0;
@@ -67,8 +78,15 @@ export class Simulation {
       this.population, city, this.clock, this.routine, seed, this.cultSettings, this.epidemic, this.zombies,
     );
     this.population.cult = this.cult;
-    this.economy = new Economy(this.population, city, this.clock, this.routine, seed, this.crimeSettings);
+    this.economy = new Economy(
+      this.population, city, this.clock, this.routine, seed, this.crimeSettings, this.settings,
+    );
     this.crime = new Crime(this.population, city, this.clock, this.routine, seed, this.crimeSettings, this.economy);
+    this.cult.economy = this.economy;
+
+    // Un seul fil d'actualité pour toute la ville
+    this.news.reset(this.clock);
+    for (const module of [this.epidemic, this.zombies, this.cult, this.economy, this.crime]) module.news = this.news;
     this.accumulator = 0;
     this.tickTimer = 0;
     this.alpha = 0;
@@ -105,6 +123,11 @@ export class Simulation {
     this.settings[name] = value;
     // Une fermeture fait sortir les occupants sans attendre la fin de leur activité.
     if (this.routine && typeof value === 'boolean') this.routine.tick();
+    if (POLICY_NEWS[name] && this.population) {
+      this.news.push('virus', `Mesure sanitaire : ${POLICY_NEWS[name][value ? 0 : 1].toLowerCase()}`, 'info');
+    }
+    // Fermetures : chômage partiel (ou reprise du travail).
+    if ((name === 'closeCommerce' || name === 'closeNightclubs') && this.economy) this.economy.applyEmployment();
     // Durée d'immunité changée : elle s'applique aussi aux guéris actuels.
     if (name === 'immunity' && this.epidemic) this.epidemic.rescheduleImmunity();
   }

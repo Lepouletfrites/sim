@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { EpidemicChart } from './EpidemicChart.js';
+import { renderLog } from './LogList.js';
 import {
   CRIME_SLIDERS, CRIME_TOGGLES, CRIME_TYPES, CRIME_LABELS, crimeSliderToSetting,
 } from '../crime/Crime.js';
@@ -161,6 +162,8 @@ export class CrimePanel {
     this.stat('ecstat-wages').textContent = euros(economy.paid.wages);
     this.stat('ecstat-welfare').textContent = euros(economy.paid.welfare);
     this.stat('ecstat-pensions').textContent = euros(economy.paid.pensions);
+    this.stat('ecstat-sickLeave').textContent = euros(economy.paid.sickLeave ?? 0);
+    this.stat('ecstat-furlough').textContent = euros(economy.paid.furlough ?? 0);
     this.stat('ecstat-today').textContent = euros(economy.revenue.day === economy.clock.day ? economy.revenue.today : 0);
     this.stat('ecstat-tills').textContent = euros(st.tills);
     this.stat('ecstat-vaults').textContent = euros(st.vaults);
@@ -176,24 +179,6 @@ export class CrimePanel {
   updateLog(crime) {
     if (crime.eventsVersion === this.eventsVersion) return;
     this.eventsVersion = crime.eventsVersion;
-    const list = this.stat('crime-log');
-    list.replaceChildren();
-    if (crime.journal.length === 0) {
-      const li = document.createElement('li');
-      li.className = 'log__empty';
-      li.textContent = 'Rien à signaler… pour l\'instant.';
-      list.appendChild(li);
-      return;
-    }
-    for (const event of crime.journal) {
-      const li = document.createElement('li');
-      li.dataset.kind = event.kind;
-      const time = document.createElement('time');
-      time.textContent = event.when;
-      const text = document.createElement('span');
-      text.textContent = event.text;
-      li.append(time, text);
-      list.appendChild(li);
-    }
+    renderLog(this.stat('crime-log'), crime.journal);
   }
 }

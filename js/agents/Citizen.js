@@ -69,6 +69,7 @@ export class Citizen {
     this.home = -1;
     this.job = -1;        // emploi attitré (s'il n'est pas au chômage : work = job)
     this.jobRank = 0;
+    this.furloughed = false; // chômage partiel (fermetures sanitaires)
     this.household = -1;  // foyer : mêmes logement et vie commune (voir Population)
     this.friends = [];    // amis (réciproques) : visites, sorties, influence
     this.work = -1;

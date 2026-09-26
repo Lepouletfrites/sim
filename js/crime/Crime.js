@@ -90,6 +90,7 @@ export class Crime {
     this.heat = new Map();     // bâtiment -> chaleur (délits récents), pour les patrouilles
     this.marks = [];
     this.heist = null;
+    this.apocalypse = false;
     this.score = 0;
     this.insecurity = 0;
     this.routine.crimeInsecurity = 0;
@@ -185,7 +186,7 @@ export class Crime {
         continue;
       }
       const poor = this.economy.isPoor(c);
-      const jobless = c.job >= 0 && c.work < 0;
+      const jobless = c.job >= 0 && c.work < 0 && !c.furloughed; // le chômage partiel protège
       let p = cfg.baseRate * s.criminality * (0.3 + 1.4 * (1 - c.civism));
       if (poor) p *= cfg.poorFactor;
       if (jobless) p *= cfg.unemployedFactor;
@@ -202,7 +203,8 @@ export class Crime {
 
   /** Activité dictée par la délinquance, ou null. */
   plan(c, h) {
-    if (!c.criminal || !this.eligible(c)) return null;
+    // Alerte zombie : on ne pense plus qu'à survivre.
+    if (!c.criminal || !this.eligible(c) || this.routine.zombieAlarm) return null;
     const cfg = CONFIG.crime;
     const s = this.settings;
     const clock = this.clock;
@@ -281,8 +283,20 @@ export class Crime {
     this.releasePrisoners(now);
     this.alarms = this.alarms.filter((a) => a.until > now);
 
+    // Apocalypse zombie : la délinquance s'efface devant la survie (les pillages, eux, continuent).
+    const apocalypse = this.routine.zombieAlarm;
+    if (apocalypse !== this.apocalypse) {
+      this.apocalypse = apocalypse;
+      if (apocalypse) {
+        if (this.heist) this.endHeist();
+        this.log('Alerte zombie : la délinquance s\'efface devant la survie, les patrouilles se replient.', 'info');
+      } else {
+        this.log('Fin de l\'alerte zombie : les délinquants reprennent leurs habitudes.', 'info');
+      }
+    }
+
     for (const c of this.population.citizens) {
-      if (!c.criminal || !this.eligible(c) || c.jailUntil > now) {
+      if (apocalypse || !c.criminal || !this.eligible(c) || c.jailUntil > now) {
         if (c.mark !== null && (!c.criminal || c.jailUntil > now)) c.mark = null;
         continue;
       }
@@ -296,10 +310,10 @@ export class Crime {
       }
     }
     if (this.heist) this.updateHeist(now);
-    else this.maybeHeist();
+    else if (!apocalypse) this.maybeHeist();
 
-    this.homeArrests(hours);
-    this.police.tick(dt);
+    if (!apocalypse) this.homeArrests(hours);
+    this.police.tick(dt, apocalypse);
     this.updateInsecurity(hours, now);
     this.ageMarks(hours);
     this.recount(now);
@@ -764,6 +778,7 @@ export class Crime {
     this.log_.unshift({ when: `J${clock.day} ${clock.format().split(' ')[1]}`, text, kind });
     if (this.log_.length > CONFIG.crime.maxEvents) this.log_.length = CONFIG.crime.maxEvents;
     this.eventsVersion++;
+    if (this.news) this.news.push('crime', text, kind);
   }
 
   logThrottled(key, hours, text, kind) {

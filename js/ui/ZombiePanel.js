@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { EpidemicChart } from './EpidemicChart.js';
+import { renderLog } from './LogList.js';
 import { ZOMBIE_SLIDERS, ZOMBIE_TOGGLES, sliderToSetting } from '../zombie/Zombies.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -198,24 +199,6 @@ export class ZombiePanel {
   updateLog(zombies) {
     if (zombies.eventsVersion === this.eventsVersion) return;
     this.eventsVersion = zombies.eventsVersion;
-    const list = this.el.log;
-    list.replaceChildren();
-    if (zombies.events.length === 0) {
-      const li = document.createElement('li');
-      li.className = 'log__empty';
-      li.textContent = 'Rien à signaler… pour l\'instant.';
-      list.appendChild(li);
-      return;
-    }
-    for (const event of zombies.events) {
-      const li = document.createElement('li');
-      li.dataset.kind = event.kind;
-      const time = document.createElement('time');
-      time.textContent = event.when;
-      const text = document.createElement('span');
-      text.textContent = event.text;
-      li.append(time, text);
-      list.appendChild(li);
-    }
+    renderLog(this.el.log, zombies.events);
   }
 }

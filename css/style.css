@@ -353,6 +353,7 @@ kbd {
 
 .tabs__btn {
   --tab-color: var(--accent);
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -426,10 +427,6 @@ kbd {
   display: none;
 }
 
-/* Tabpanel sans sous-onglets (Ville) */
-#tab-city {
-  padding-top: 14px;
-}
 
 /* Sous-onglets : restent visibles en haut pendant le défilement */
 .subtabs {
@@ -1536,6 +1533,239 @@ input[type="range"] {
   height: 12px;
   border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 214, 140, 0.9) 0 20%, rgba(255, 214, 140, 0) 70%);
+}
+
+/* ===================== Vue d'ensemble et fil d'actualité ===================== */
+
+/* Pastille de non-lus sur un onglet */
+.tabs__badge {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--tab-color);
+  color: #0d0f12;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.tabs__badge[hidden] {
+  display: none;
+}
+
+/* Moral des habitants */
+.mood {
+  --status-color: #3a4048;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-left: 4px solid var(--status-color);
+}
+
+.mood[data-level="calm"] { --status-color: #2ecc71; }
+.mood[data-level="sect"] { --status-color: #9ccc3a; }
+.mood[data-level="outbreak"] { --status-color: #f1c40f; }
+.mood[data-level="alarm"] { --status-color: #e67e22; }
+.mood[data-level="fallen"] { --status-color: #e74c3c; }
+
+.mood__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mood__head strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.mood__fill {
+  background: var(--status-color);
+}
+
+.mood__why {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+/* Cartes des modules (cliquables) */
+.systems {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.system {
+  --level-color: #2ecc71;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  border-top: 3px solid var(--system-color);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.system:hover {
+  background: var(--bg-hover);
+}
+
+.system[data-level="warn"] { --level-color: #f1c40f; }
+.system[data-level="alarm"] { --level-color: #e74c3c; }
+
+.system__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* Témoin d'état : vert, jaune, rouge */
+.system__title::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--level-color);
+}
+
+.system__value {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.system__sub {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+/* Filtres du fil */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.filters__btn {
+  --filter-color: var(--accent);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.filters__btn:hover {
+  color: var(--text);
+}
+
+.filters__btn[aria-pressed="true"] {
+  color: #0d0f12;
+  border-color: var(--filter-color);
+  background: var(--filter-color);
+}
+
+.log--feed {
+  max-height: 380px;
+  margin-bottom: 12px;
+  overflow-y: auto;
+}
+
+.log__tag {
+  margin-right: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tag-color, var(--text-muted));
+}
+
+.log li[data-source="virus"] { --tag-color: #e74c3c; }
+.log li[data-source="zombies"] { --tag-color: #7bd13a; }
+.log li[data-source="cult"] { --tag-color: #d35cff; }
+.log li[data-source="crime"] { --tag-color: #ff4d6d; }
+.log li[data-source="city"] { --tag-color: #3498db; }
+
+/* Notifications sur la carte */
+.toasts {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: grid;
+  gap: 6px;
+  width: min(320px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.toast {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--toast-color);
+  background: rgba(21, 24, 28, 0.94);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  pointer-events: auto;
+  animation: toast-in 0.25s ease-out;
+  transition: opacity 0.4s, transform 0.4s;
+}
+
+.toast b {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--toast-color);
+}
+
+.toast[data-kind="good"] {
+  background: rgba(20, 30, 26, 0.94);
+}
+
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; transition: none; }
 }
 
 /* ============================== Responsive ============================== */

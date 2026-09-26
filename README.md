@@ -14,9 +14,29 @@ Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D)
 | **Zombies** | **Suivi** : état de l'apocalypse, actions et clic, courbe, survivants, remède, journal · **Riposte** : police, barricades de rue, armée · **Réglages** : morsure, zombies, humains, barricades et vivres, remède, règles farfelues |
 | **Crime** | **Suivi** : état, délits sur 24 h, sentiment d'insécurité, bilan, main courante · **Économie** : épargne, liquide, chiffre d'affaires, niveaux de vie, flux · **Réglages** : société (criminalité, chômage, aides, salaires), sécurité (patrouilles, éclairage, vidéosurveillance, peines, banques), règles |
 | **Sectes** | **Suivi** : état, actions et clic, fiche de chaque secte, courbe des fidèles, bilan, journal · **Riposte** : police, descente au QG, pompiers · **Réglages** : recrutement, emprise, croissance, chaos, règles farfelues |
-| **Ville** | Génération (population, densité, désordre, espaces verts, rivière, graine), lieux et horaires |
+| **Ville** | **Vue d'ensemble** : moral des habitants, état de chaque module, décès par cause, fil d'actualité · **Génération** : population, densité, désordre, espaces verts, rivière, graine · **Lieux** : occupation et horaires |
 
 - Pied de panneau : FPS, sous-étapes, nombre de bâtiments, graine et raccourcis clavier (`Espace` pause, `1`–`5` vitesse, `I` infecter, `G` gourou).
+
+### Vue d'ensemble et fil d'actualité
+
+- **Moral des habitants** (onglet Ville) : il combine ce qui pèse sur la ville (épidémie, zombies, insécurité, précarité), de « Serein » à « En crise », et dit pourquoi.
+- **Une carte par module** (virus, zombies, sectes, crime, économie, population) avec un témoin vert, jaune ou rouge ; un clic ouvre l'onglet concerné.
+- **Décès par cause** : virus, zombies et frappes, sectes, délinquance.
+- **Fil d'actualité** : tous les événements de la ville au même endroit, filtrables par module. L'épidémie a désormais aussi son journal (premier cas, seuils d'infection, hôpital saturé, vagues, décès, laboratoire saturé, mesures sanitaires).
+- **Pastilles de non-lus** sur les onglets : ce qui s'est passé depuis la dernière visite.
+- **Notifications** en haut de la carte pour les événements marquants (désactivables) ; un clic ouvre l'onglet.
+
+### Tout est lié
+
+| Cause | Effet |
+|---|---|
+| Fermeture des commerces ou des boîtes | Des salariés passent au **chômage partiel** (payés 70 %) ; ils reprennent à la réouverture |
+| Malade en quarantaine, alité ou à l'hôpital | **Arrêt maladie** : salaire payé à 50 % |
+| Alerte zombie | Les entreprises ferment : **plus de salaires** (pensions et aides restent versées) ; la **délinquance s'efface** devant la survie, les patrouilles rentrent |
+| Précarité, chômage | Les habitants sont **plus réceptifs aux sectes** (44 % des précaires contre 20 % des autres, par défaut) et plus tentés par la délinquance |
+| Insécurité (sectes ou délinquance) | Rues vides le soir ; avec « La peur fait recette », les sectes recrutent davantage |
+| Épidémie, confinements | Moins de foule, donc moins de vols à la tire ; logements occupés, donc moins de cambriolages |
 
 ## Fonctionnalités
 
@@ -270,6 +290,7 @@ js/
 │   ├── GameLoop.js         requestAnimationFrame + deltaTime + FPS
 │   ├── Simulation.js       timeScale, pas fixe (sub-stepping), tick lent
 │   ├── Clock.js            Heure de jeu, jours de la semaine, lumière du jour
+│   ├── News.js             Fil d'actualité commun à tous les modules
 │   ├── SpatialHashGrid.js  Grille spatiale (listes chaînées en tableaux typés)
 │   └── Random.js           PRNG déterministe (mulberry32)
 ├── world/
@@ -306,6 +327,8 @@ js/
     ├── ZombiePanel.js      Onglet Zombies
     ├── CultPanel.js        Onglet Sectes
     ├── CrimePanel.js       Onglet Crime (dont l'économie)
+    ├── OverviewPanel.js    Vue d'ensemble, fil d'actualité, pastilles et notifications
+    ├── LogList.js          Affichage commun des journaux
     └── EpidemicChart.js    Courbe de l'épidémie (aire empilée)
 ```
 

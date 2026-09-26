@@ -42,6 +42,7 @@
       <div class="map" id="map">
         <canvas id="city-canvas" aria-label="Carte de la ville simulée"></canvas>
         <div class="map__badge" id="pause-badge" hidden>EN PAUSE</div>
+        <div class="toasts" id="toasts" aria-live="polite"></div>
 
         <details class="legend-box" id="map-legend" open>
           <summary>Légende</summary>
@@ -205,6 +206,13 @@
               <h3>Où se contamine-t-on ?</h3>
               <ul class="bars" id="contagion-bars"></ul>
               <p class="note">À la maison, seulement entre membres du même foyer. Ailleurs, entre personnes proches dans le même lieu ; un peu dans la rue.</p>
+            </div>
+
+            <div class="card">
+              <h3>Journal de l'épidémie</h3>
+              <ol class="log" id="virus-log">
+                <li class="log__empty">Rien à signaler… pour l'instant.</li>
+              </ol>
             </div>
           </div>
 
@@ -825,6 +833,8 @@
                 <li>Salaires versés (dernier jour)<b id="ecstat-wages">0 €</b></li>
                 <li>Aides sociales versées<b id="ecstat-welfare">0 €</b></li>
                 <li>Pensions versées<b id="ecstat-pensions">0 €</b></li>
+                <li>Indemnités maladie (arrêts)<b id="ecstat-sickLeave">0 €</b></li>
+                <li>Chômage partiel (fermetures)<b id="ecstat-furlough">0 €</b></li>
                 <li>Chiffre d'affaires aujourd'hui<b id="ecstat-today">0 €</b></li>
                 <li>Caisses des commerces<b id="ecstat-tills">0 €</b></li>
                 <li>Coffres des banques<b id="ecstat-vaults">0 €</b></li>
@@ -898,6 +908,45 @@
 
         <!-- =============================== VILLE =============================== -->
         <section class="tabpanel" id="tab-city" role="tabpanel" aria-labelledby="tab-btn-city" hidden>
+          <div class="subtabs" role="tablist" aria-label="Ville">
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-city-overview" aria-controls="sub-city-overview" data-subtab="city-overview">Vue d'ensemble</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-city-build" aria-controls="sub-city-build" data-subtab="city-build">Génération</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-city-places" aria-controls="sub-city-places" data-subtab="city-places">Lieux</button>
+          </div>
+
+          <!-- Ville · Vue d'ensemble -->
+          <div class="subpanel" id="sub-city-overview" role="tabpanel" aria-labelledby="sub-btn-city-overview">
+            <div class="mood" id="mood" data-level="calm">
+              <div class="mood__head">
+                <span>Moral des habitants</span>
+                <strong id="mood-label">Serein</strong>
+              </div>
+              <div class="meter__track"><div class="meter__fill mood__fill" id="mood-fill"></div></div>
+              <p class="mood__why" id="mood-why">Rien ne pèse sur la ville.</p>
+            </div>
+
+            <div class="systems" id="systems"></div>
+
+            <div class="card">
+              <h3>Décès par cause</h3>
+              <div class="stackbar" id="deaths-bar" aria-hidden="true"></div>
+              <ul class="rows" id="deaths-rows"></ul>
+            </div>
+
+            <div class="card">
+              <div class="card__head">
+                <h3>Fil d'actualité</h3>
+                <div class="filters" id="news-filters" role="group" aria-label="Filtrer le fil d'actualité"></div>
+              </div>
+              <ol class="log log--feed" id="news-feed">
+                <li class="log__empty">Rien à signaler… pour l'instant.</li>
+              </ol>
+              <label class="switch"><input type="checkbox" id="toggle-toasts" checked><span class="switch__track"></span>Notifications sur la carte<span class="switch__help">Les événements marquants s'affichent quelques secondes en haut de la carte</span></label>
+            </div>
+          </div>
+
+          <!-- Ville · Génération -->
+          <div class="subpanel" id="sub-city-build" role="tabpanel" aria-labelledby="sub-btn-city-build" hidden>
           <div class="card">
             <h3>Générer la ville</h3>
             <label class="control" for="slider-population">
@@ -930,10 +979,14 @@
             <button type="button" class="btn btn--primary btn--block" id="btn-regenerate">Nouvelle ville au hasard</button>
             <p class="note">Les curseurs s'appliquent au relâchement et gardent la même graine : on voit l'effet sur la même ville.</p>
           </div>
+          </div>
 
-          <div class="card">
-            <h3>Lieux</h3>
-            <ul class="places" id="places-list"></ul>
+          <!-- Ville · Lieux -->
+          <div class="subpanel" id="sub-city-places" role="tabpanel" aria-labelledby="sub-btn-city-places" hidden>
+            <div class="card">
+              <h3>Lieux</h3>
+              <ul class="places" id="places-list"></ul>
+            </div>
           </div>
         </section>
       </div>

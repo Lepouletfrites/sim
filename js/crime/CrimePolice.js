@@ -36,7 +36,12 @@ export class CrimePolice {
 
   // ------------------------------------------------------------------ Tick
 
-  tick(dt) {
+  /** @param {boolean} standDown alerte zombie : les patrouilles rentrent au commissariat */
+  tick(dt, standDown = false) {
+    if (standDown) {
+      this.units.length = 0;
+      return;
+    }
     this.adjustCount();
     const crime = this.crime;
     const citizens = this.population.citizens;

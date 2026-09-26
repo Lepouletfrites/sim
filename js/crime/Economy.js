@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { Random } from '../core/Random.js';
 import { PlaceType } from '../world/PlaceTypes.js';
 import { ZombieState } from '../zombie/ZombieState.js';
+import { Care } from '../agents/Citizen.js';
 
 /** Activités qui ne donnent lieu à aucun achat en entrant. */
 const NO_PURCHASE = new Set(['loot', 'fetch', 'burgle', 'rob', 'heist', 'meeting', 'sermon', 'jail', 'work', 'school', 'lunch']);
@@ -21,12 +22,19 @@ function logNormal(rng, spread) {
  * (onglet Crime) : la précarité nourrit la délinquance.
  */
 export class Economy {
-  constructor(population, city, clock, routine, seed, settings) {
+  /**
+   * @param {object} settings réglages de l'onglet Crime (chômage, aides, salaires)
+   * @param {object} policies mesures sanitaires (fermetures -> chômage partiel)
+   */
+  constructor(population, city, clock, routine, seed, settings, policies) {
     this.population = population;
     this.city = city;
     this.clock = clock;
     this.routine = routine;
     this.settings = settings;
+    this.policies = policies;
+    this.news = null;
+    this.watch = { poverty: 0, unemployment: 0, halted: false, furloughed: 0 };
     this.rng = new Random(seed ^ 0x7f4a7c15);
     routine.economy = this;
     this.lastPayDay = clock.day - (clock.hour >= CONFIG.economy.payHour ? 0 : 1);
@@ -75,17 +83,44 @@ export class Economy {
     this.applyEmployment();
   }
 
-  /** Chômage : les actifs au `jobRank` le plus bas perdent leur emploi. */
+  /** Part des actifs mis au chômage partiel par les fermetures sanitaires. */
+  get layoffs() {
+    const p = this.policies;
+    if (!p) return 0;
+    const cfg = CONFIG.economy.layoffs;
+    return (p.closeCommerce ? cfg.commerce : 0) + (p.closeNightclubs ? cfg.nightclubs : 0);
+  }
+
+  /**
+   * Chômage : les actifs au `jobRank` le plus bas perdent leur emploi ; juste au-dessus,
+   * ceux que les fermetures sanitaires mettent au chômage partiel (payés 70 %).
+   */
   applyEmployment() {
     const u = this.settings.unemployment;
+    const f = u + this.layoffs;
+    let furloughed = 0;
     for (const c of this.population.citizens) {
       if (c.age === 'child' || c.job < 0) continue;
-      const work = c.jobRank < u ? -1 : c.job;
+      const work = c.jobRank < f ? -1 : c.job;
+      c.furloughed = c.jobRank >= u && c.jobRank < f;
+      if (c.furloughed) furloughed++;
       if (work !== c.work) {
         c.work = work;
         if (c.alive && c.zombie === ZombieState.HUMAN && c.activity === 'work') this.routine.replan(c);
       }
     }
+    if (furloughed !== this.watch.furloughed) {
+      if (furloughed > this.watch.furloughed) {
+        this.log(`Fermetures sanitaires : ${furloughed} salariés au chômage partiel (payés 70 %).`, 'bad');
+      } else if (furloughed === 0) {
+        this.log('Réouverture : les salariés au chômage partiel reprennent le travail.', 'good');
+      }
+      this.watch.furloughed = furloughed;
+    }
+  }
+
+  log(text, kind = 'info') {
+    if (this.news) this.news.push('city', text, kind);
   }
 
   // ------------------------------------------------------------ Dépenses
@@ -147,6 +182,12 @@ export class Economy {
   tick() {
     const cfg = CONFIG.economy;
     const clock = this.clock;
+    const halted = this.routine.zombieAlarm;
+    if (halted !== this.watch.halted) {
+      this.watch.halted = halted;
+      if (halted) this.log('Alerte zombie : les entreprises ferment, plus aucun salaire n\'est versé.', 'bad');
+      else this.log('Fin de l\'alerte : les entreprises rouvrent et reprennent la paie.', 'good');
+    }
     if (clock.hour >= cfg.payHour && this.lastPayDay !== clock.day) {
       this.lastPayDay = clock.day;
       this.payDay();
@@ -164,22 +205,57 @@ export class Economy {
       this.sampleTimer = 0;
       this.recount();
       this.sample();
+      this.watchMilestones();
     }
   }
 
-  /** Salaires (jours ouvrés), pensions et aides (tous les jours). */
+  /** Précarité et chômage qui franchissent des paliers : dans le fil d'actualité. */
+  watchMilestones() {
+    const st = this.stats;
+    const w = this.watch;
+    const adults = st.poor + st.modest + st.comfortable + st.rich;
+    const poverty = adults > 0 ? st.poor / adults : 0;
+    const levels = [0.15, 0.25, 0.4];
+    const pLevel = levels.filter((l) => poverty >= l).length;
+    if (pLevel > w.poverty) {
+      this.log(`Précarité : ${Math.round(poverty * 100)} % des adultes n'ont presque plus rien en banque.`, 'bad');
+    } else if (pLevel < w.poverty && pLevel === 0) {
+      this.log('La précarité recule.', 'good');
+    }
+    w.poverty = pLevel;
+    const active = st.workers + st.unemployed;
+    const unemployment = active > 0 ? st.unemployed / active : 0;
+    const uLevel = [0.15, 0.3].filter((l) => unemployment >= l).length;
+    if (uLevel > w.unemployment) this.log(`Le chômage atteint ${Math.round(unemployment * 100)} % des actifs.`, 'bad');
+    w.unemployment = uLevel;
+  }
+
+  /**
+   * Salaires (jours ouvrés), pensions et aides (tous les jours).
+   * Malade arrêté : indemnités à 50 %. Chômage partiel : 70 %. Alerte zombie : les
+   * entreprises ferment, plus aucun salaire (l'État verse encore pensions et aides).
+   */
   payDay() {
     const s = this.settings;
+    const cfg = CONFIG.economy;
     const workday = this.clock.weekday < 5;
-    const welfare = CONFIG.economy.welfareBase * s.welfare;
-    const paid = { wages: 0, welfare: 0, pensions: 0 };
+    const welfare = cfg.welfareBase * s.welfare;
+    const halted = this.routine.zombieAlarm;
+    const paid = { wages: 0, welfare: 0, pensions: 0, sickLeave: 0, furlough: 0 };
     for (const c of this.population.citizens) {
       if (!c.alive || c.zombie !== ZombieState.HUMAN || c.age === 'child') continue;
       if (c.work >= 0) {
-        if (!workday && !(this.clock.weekday === 5 && c.worksSaturday)) continue;
-        const pay = c.wage * s.wages;
+        if (halted || (!workday && !(this.clock.weekday === 5 && c.worksSaturday))) continue;
+        const sick = c.care === Care.HOSPITAL || c.care === Care.QUARANTINE || c.care === Care.BEDRIDDEN;
+        const pay = c.wage * s.wages * (sick ? cfg.sickPay : 1);
         c.bank += pay;
-        paid.wages += pay;
+        if (sick) paid.sickLeave += pay;
+        else paid.wages += pay;
+      } else if (c.furloughed) {
+        if (!workday || halted) continue;
+        const pay = c.wage * s.wages * cfg.furloughPay;
+        c.bank += pay;
+        paid.furlough += pay;
       } else if (c.age === 'senior' && c.job < 0) {
         c.bank += c.wage;
         paid.pensions += c.wage;
@@ -233,6 +309,7 @@ export class Economy {
     st.bank = 0;
     st.cash = 0;
     st.unemployed = 0;
+    st.furloughed = 0;
     st.workers = 0;
     st.poor = 0;
     st.modest = 0;
@@ -244,6 +321,7 @@ export class Economy {
       st.bank += c.bank;
       st.cash += c.cash;
       if (c.job >= 0) {
+        if (c.furloughed) st.furloughed++;
         if (c.work < 0) st.unemployed++;
         else {
           st.workers++;

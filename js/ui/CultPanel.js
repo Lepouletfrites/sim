@@ -1,5 +1,6 @@
 import { CONFIG } from '../config.js';
 import { EpidemicChart } from './EpidemicChart.js';
+import { renderLog } from './LogList.js';
 import { CULT_SLIDERS, CULT_TOGGLES, cultSliderToSetting, CultStage, STAGE_LABELS } from '../cult/Cult.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -262,24 +263,6 @@ export class CultPanel {
   updateLog(cult) {
     if (cult.eventsVersion === this.eventsVersion) return;
     this.eventsVersion = cult.eventsVersion;
-    const list = this.el.log;
-    list.replaceChildren();
-    if (cult.events.length === 0) {
-      const li = document.createElement('li');
-      li.className = 'log__empty';
-      li.textContent = 'Rien à signaler… pour l\'instant.';
-      list.appendChild(li);
-      return;
-    }
-    for (const event of cult.events) {
-      const li = document.createElement('li');
-      li.dataset.kind = event.kind;
-      const time = document.createElement('time');
-      time.textContent = event.when;
-      const text = document.createElement('span');
-      text.textContent = event.text;
-      li.append(time, text);
-      list.appendChild(li);
-    }
+    renderLog(this.el.log, cult.events);
   }
 }

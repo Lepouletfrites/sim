@@ -387,6 +387,8 @@ export const CONFIG = {
     wordRate: 0.7,            // conviction / h de contact avec un fidèle (bouche-à-oreille 100 %)
     familyBoost: 0.5,         // à la maison, les proches sont exposés en permanence (× taux)
     friendBoost: 0.4,         // un ami croisé (même lieu) est influencé, à toute distance
+    povertyGullibility: 0.2,  // la précarité rend plus crédule (+ sur la crédulité individuelle)
+    joblessGullibility: 0.1,  // le chômage aussi
     inviteChance: 0.15,       // (× bouche-à-oreille) un fidèle emmène un ami réceptif à la réunion
     // Résistance de la société (× vigilance)
     familyPull: 0.05,         // ferveur / h retirée à un fidèle par proche hostile à la maison
@@ -461,6 +463,9 @@ export const CONFIG = {
     atmWithdraw: [40, 160],
     overdraft: -600,          // découvert maximal
     poorBelow: 100,           // ménage précaire : moins que ça en banque
+    sickPay: 0.5,             // arrêt maladie : indemnités (× salaire)
+    furloughPay: 0.7,         // chômage partiel dû aux fermetures (× salaire)
+    layoffs: { commerce: 0.06, nightclubs: 0.01 }, // part des actifs au chômage partiel par fermeture
     richAbove: 6000,
     payHour: 18,              // salaires et aides versés chaque jour à cette heure
     prices: {                 // € dépensés en entrant
