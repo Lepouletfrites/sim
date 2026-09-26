@@ -18,7 +18,11 @@ function hash(a, b) {
   return s - Math.floor(s);
 }
 const HEALTH_DRAW_ORDER = [Health.SUSCEPTIBLE, Health.RECOVERED, Health.INCUBATING, Health.SYMPTOMATIC];
-const VENUES = [PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB];
+const VENUES = [
+  PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB,
+  PlaceType.BAR, PlaceType.SHOP, PlaceType.BANK,
+];
+const CRIME_ACTIVE = new Set(['lurk', 'burgle', 'rob', 'heist']);
 
 /** Mélange deux couleurs "#rrggbb" (t = 0 -> a, t = 1 -> b). */
 function mixHex(a, b, t) {
@@ -64,6 +68,14 @@ export class Renderer {
 
   setCity(city) {
     this.city = city;
+    // Lampadaires : aux carrefours des avenues et le long des rues, un tous les ~90 px
+    this.lamps = [];
+    for (const x of city.avenuesX) {
+      for (let y = 20; y < city.height; y += 90) if (city.isWalkable(x, y)) this.lamps.push({ x, y });
+    }
+    for (const y of city.avenuesY) {
+      for (let x = 20; x < city.width; x += 90) if (city.isWalkable(x, y)) this.lamps.push({ x, y });
+    }
     this.venues = city.buildings.filter((b) => VENUES.includes(b.type));
     this.homes = city.buildings.map((b, i) => (b.type === PlaceType.HOME ? i : -1)).filter((i) => i >= 0);
     this.renderStatic();
@@ -259,6 +271,8 @@ export class Renderer {
       }
     }
 
+    if (simulation.crime && night > 0.3) this.drawStreetLights(ctx, simulation.crime.settings.lighting, night);
+
     const cult = simulation.cult && simulation.cult.active ? simulation.cult : null;
     if (cult) this.drawCultGround(ctx, cult);
 
@@ -290,6 +304,104 @@ export class Renderer {
 
     if (simulation.zombies && simulation.zombies.active) this.drawZombies(ctx, citizens, alpha, simulation.zombies);
     if (cult) this.drawCultAgents(ctx, citizens, alpha, cult);
+    if (simulation.crime) this.drawCrime(ctx, citizens, alpha, simulation.crime);
+  }
+
+  // ------------------------------------------------------------------ Crime
+
+  /** Halos des lampadaires la nuit, plus ou moins nombreux selon l'éclairage public. */
+  drawStreetLights(ctx, lighting, night) {
+    if (!this.lamps || lighting <= 0) return;
+    const color = CONFIG.colors.streetLight;
+    const step = lighting > 0.66 ? 1 : lighting > 0.33 ? 2 : 3; // moins de lampadaires allumés
+    const a = (0.1 + 0.12 * lighting) * night;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < this.lamps.length; i += step) {
+      const { x, y } = this.lamps[i];
+      const g = ctx.createRadialGradient(x, y, 0, x, y, 26);
+      g.addColorStop(0, color.replace('ALPHA', a.toFixed(3)));
+      g.addColorStop(1, color.replace('ALPHA', '0'));
+      ctx.fillStyle = g;
+      ctx.fillRect(x - 26, y - 26, 52, 52);
+    }
+    ctx.restore();
+  }
+
+  /** Délits récents, délinquants en action et recherchés, patrouilles (gyrophares en intervention). */
+  drawCrime(ctx, citizens, alpha, crime) {
+    const colors = CONFIG.colors;
+    const now = crime.clock.time;
+    const t = performance.now() / 1000;
+
+    // Traces des délits : un losange qui s'efface
+    const life = CONFIG.crime.markLife;
+    for (const m of crime.marks) {
+      ctx.globalAlpha = 0.85 * (1 - m.age / life);
+      ctx.fillStyle = colors.crimeMarks[m.type] ?? colors.criminal;
+      const s = m.type === 'heist' ? 6 : 3.5;
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y - s);
+      ctx.lineTo(m.x + s, m.y);
+      ctx.lineTo(m.x, m.y + s);
+      ctx.lineTo(m.x - s, m.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Délinquants en action (anneau pointillé) et recherchés (anneau plein)
+    ctx.lineWidth = 1.3;
+    ctx.strokeStyle = colors.criminal;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    for (const c of citizens) {
+      if (!c.alive || !c.criminal || c.wantedUntil > now || !CRIME_ACTIVE.has(c.activity) || c.jailUntil > now) continue;
+      const x = c.px + (c.x - c.px) * alpha;
+      const y = c.py + (c.y - c.py) * alpha;
+      ctx.moveTo(x + c.radius + 2, y);
+      ctx.arc(x, y, c.radius + 2, 0, TAU);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.strokeStyle = colors.wanted;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    for (const c of citizens) {
+      if (!c.alive || c.wantedUntil <= now || c.jailUntil > now) continue;
+      const x = c.px + (c.x - c.px) * alpha;
+      const y = c.py + (c.y - c.py) * alpha;
+      ctx.moveTo(x + c.radius + 2, y);
+      ctx.arc(x, y, c.radius + 2, 0, TAU);
+    }
+    ctx.stroke();
+
+    // Patrouilles : ronds bleus ; en intervention, gyrophare rouge/bleu
+    const units = crime.police.units;
+    if (units.length === 0) return;
+    const a = this.lastAlpha ?? 1;
+    const flash = Math.floor(t * 6) % 2;
+    ctx.globalAlpha = 0.6;
+    for (const u of units) {
+      if (!u.responding && !u.chase) continue;
+      ctx.fillStyle = colors.siren[flash];
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, u.radius + 3.5, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = colors.police;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (const u of units) {
+      const x = u.px + (u.x - u.px) * a;
+      const y = u.py + (u.y - u.py) * a;
+      ctx.moveTo(x + u.radius, y);
+      ctx.arc(x, y, u.radius, 0, TAU);
+    }
+    ctx.fill();
+    ctx.stroke();
   }
 
   // ------------------------------------------------------------------ Sectes

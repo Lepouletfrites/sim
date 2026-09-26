@@ -67,6 +67,8 @@ export class Citizen {
     this.frailty = 1;     // multiplicateur du risque de forme grave
     this.infectivity = 1; // quantité de virus émise (quelques superpropagateurs)
     this.home = -1;
+    this.job = -1;        // emploi attitré (s'il n'est pas au chômage : work = job)
+    this.jobRank = 0;
     this.household = -1;  // foyer : mêmes logement et vie commune (voir Population)
     this.friends = [];    // amis (réciproques) : visites, sorties, influence
     this.work = -1;
@@ -144,6 +146,26 @@ export class Citizen {
     this.hold = false;      // immobile dans la rue (prêche, écoute, raid)
     this.holdUntil = 0;
     this.killedBy = '';     // mort violente (hors virus et zombies) : 'assault', 'fire', 'brawl'…
+
+    // Argent (voir Economy.js), en euros
+    this.cash = 0;          // liquide en poche
+    this.bank = 0;          // compte en banque
+    this.wage = 0;          // €/jour travaillé (ou pension)
+    this.cashHabit = 0.5;   // tendance à payer en liquide
+
+    // Criminalité (voir Crime.js)
+    this.crimeRoll = 0;     // tirage fixe : délinquant si sous le seuil du jour
+    this.criminal = false;
+    this.violent = false;   // prêt à agresser ou braquer
+    this.convictions = 0;
+    this.wantedUntil = 0;   // recherché par la police jusqu'à cette heure
+    this.crimeTarget = -1;  // bâtiment visé (cambriolage, braquage)
+    this.crimeDoneAt = 0;
+    this.heist = null;      // braquage de banque en cours
+    this.robber = false;    // a participé à un braquage : armé, il résiste
+    this.mark = null;       // passant suivi (agression)
+    this.jailReason = '';   // 'crime' si incarcéré pour un délit
+    this.atmAt = -Infinity; // dernier retrait au distributeur (repéré par les voleurs)
   }
 
   get alive() {

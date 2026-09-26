@@ -24,12 +24,20 @@ export class Routine {
     this.rng = new Random(seed ^ 0x68e31da4);
     this.awareness = 0;       // tenu à jour par l'Epidemic
     this.zombieAlarm = false; // tenu à jour par Zombies
-    this.insecurity = 0;      // tenu à jour par Cult : méfaits récents, 0..1
+    this.cultInsecurity = 0;  // tenu à jour par Cult : méfaits récents, 0..1
+    this.crimeInsecurity = 0; // tenu à jour par Crime : délits récents, 0..1
     this.cult = null;         // planificateur des sectes (prêches, réunions, raids, prison)
+    this.crime = null;        // planificateur des délinquants (vols, cambriolages, braquages)
+    this.economy = null;      // paiements à l'entrée des lieux, distributeurs
     this.onEnter = null;      // callback (citoyen, bâtiment) à l'entrée d'un bâtiment
     this.onRefused = null;    // callback (citoyen, bâtiment) -> true si le refus est pris en charge
     this.occupancy = new Uint16Array(city.buildings.length);
     this.openCache = new Map();
+  }
+
+  /** Sentiment d'insécurité : le pire des deux (sectes, délinquance). */
+  get insecurity() {
+    return Math.max(this.cultInsecurity, this.crimeInsecurity);
   }
 
   isOpen(type) {
@@ -148,11 +156,21 @@ export class Routine {
       if (cultPlan) return cultPlan;
     }
 
-    // 2. Nuit : dormir, ou sortir en boîte pour les couche-tard
+    // Délinquants : vol, rôde nocturne, cambriolage, braquage
+    if (this.crime !== null) {
+      const crimePlan = this.crime.plan(c, h);
+      if (crimePlan) return crimePlan;
+    }
+
+    // 2. Nuit : dormir, ou sortir en boîte (ou au bar) pour les couche-tard
     if (!this.isAwake(c, h)) {
       if (c.nightOwl && this.isOpen(PlaceType.NIGHTCLUB) && rng.chance(cfg.nightclubChance * c.sociability * mood)) {
         const club = this.pickNear(PlaceType.NIGHTCLUB, c);
         if (club >= 0) return { building: club, until: clock.next(rng.range(3, 5)), activity: 'nightclub' };
+      }
+      if (c.nightOwl && this.isOpen(PlaceType.BAR) && rng.chance(cfg.nightBarChance * c.sociability * mood)) {
+        const bar = this.pickNear(PlaceType.BAR, c);
+        if (bar >= 0) return { building: bar, until: clock.next(1 + rng.next()), activity: 'bar' };
       }
       return { building: c.home, until: clock.next(c.wake), activity: 'sleep' };
     }
@@ -215,27 +233,40 @@ export class Routine {
   }
 
   leisure(c, mood) {
-    const { leisure } = CONFIG.routine;
+    const { leisure, evening: eve } = CONFIG.routine;
     const clock = this.clock;
     const rng = this.rng;
+    const h = clock.hour;
     const weekend = clock.isWeekend;
     const social = 0.5 + c.sociability;
     const sick = c.health === Health.SYMPTOMATIC;
-    const evening = clock.hour >= 20 || clock.hour < 7; // on flâne peu une fois la nuit tombée
+    const child = c.age === 'child';
+    // La soirée : apéro, dîner dehors, promenade. Mais l'insécurité vide les rues le soir.
+    const evening = h >= eve.from && h < eve.to;
+    const late = h >= 22 || h < 7;
+    const nightFear = evening || late ? 1 - 0.8 * this.crimeInsecurity * (0.5 + c.caution) : 1;
+    const ev = (key) => (evening ? eve[key] * nightFear : 1);
 
     const options = [
-      ['home', leisure.home.weight * (c.age === 'senior' ? 1.5 : 1) * (sick ? 2 : 1)],
-      ['walk', leisure.walk.weight * mood * (weekend ? 1.5 : 1) * (evening ? 0.2 : 1)],
+      ['home', leisure.home.weight * (c.age === 'senior' ? 1.5 : 1) * (sick ? 2 : 1) * (evening ? eve.home : 1)],
+      ['walk', leisure.walk.weight * mood * (weekend ? 1.5 : 1) * (late ? 0.2 : ev('walk'))],
     ];
     if (this.isOpen(PlaceType.MALL)) {
       options.push(['mall', leisure.mall.weight * mood * social * (weekend ? 2 : 1)]);
     }
     if (this.isOpen(PlaceType.RESTAURANT)) {
-      options.push(['restaurant', leisure.restaurant.weight * mood * social]);
+      options.push(['restaurant', leisure.restaurant.weight * mood * social * ev('restaurant')]);
     }
+    if (!child && this.isOpen(PlaceType.BAR)) {
+      const age = c.age === 'young' ? 1.5 : c.age === 'senior' ? 0.4 : 1;
+      options.push(['bar', leisure.bar.weight * mood * social * age * ev('bar') * (weekend ? 1.3 : 1)]);
+    }
+    if (!child && this.isOpen(PlaceType.SHOP)) options.push(['shop', leisure.shop.weight * mood]);
+    // Plus de liquide : un saut au distributeur (toujours ouvert).
+    if (!child && this.economy !== null && this.economy.needsCash(c)) options.push(['atm', leisure.atm.weight]);
     // Rendre visite à un ami qui est chez lui (pas trop tard le soir).
-    const host = clock.hour < 21.5 ? this.friendAtHome(c) : null;
-    if (host) options.push(['visit', leisure.visit.weight * mood * social * (weekend ? 1.5 : 1)]);
+    const host = h < 22 ? this.friendAtHome(c) : null;
+    if (host) options.push(['visit', leisure.visit.weight * mood * social * (weekend ? 1.5 : 1) * ev('visit')]);
 
     let total = 0;
     for (const [, w] of options) total += w;
@@ -254,9 +285,11 @@ export class Routine {
       choice === 'home' ? c.home
         : choice === 'walk' ? -1
           : choice === 'visit' ? host.home
-            : this.pickNear(choice, c);
+            : choice === 'atm' ? this.economy.nearestBank(c)
+              : this.pickNear(choice, c);
     // On sort rarement seul : un ami libre vient aussi.
-    if ((choice === 'restaurant' || choice === 'mall') && building >= 0 && rng.chance(CONFIG.routine.joinFriendChance)) {
+    if ((choice === 'restaurant' || choice === 'mall' || choice === 'bar') && building >= 0 &&
+      rng.chance(CONFIG.routine.joinFriendChance)) {
       const friend = this.friendAtHome(c);
       if (friend) this.bringAlong(friend, building, until, choice);
     }
@@ -308,11 +341,19 @@ export class Routine {
   arrive(c) {
     const b = c.destination;
     const building = this.city.buildings[b];
-    if (c.activity === 'preach' || c.activity === 'raid') {
-      // On ne rentre pas : on s'installe devant la porte (prêche, attroupement du raid).
+    if (c.activity === 'preach' || c.activity === 'raid' || c.activity === 'heist') {
+      // On ne rentre pas : on s'installe devant la porte (prêche, attroupement du raid ou du braquage).
       c.destination = -1;
       c.field = null;
       c.hold = true;
+      return;
+    }
+    if (c.activity === 'atm') {
+      // Distributeur, dans la façade : on retire et on repart.
+      c.destination = -1;
+      c.field = null;
+      if (this.economy !== null) this.economy.withdraw(c);
+      c.activityEnd = this.clock.time;
       return;
     }
     if (this.isUnsafe(b)) {
@@ -343,6 +384,7 @@ export class Routine {
     this.enter(c, b);
     this.occupancy[b]++;
     if (this.onEnter) this.onEnter(c, b);
+    if (this.economy !== null) this.economy.onEnter(c, building);
   }
 
   /** Bâtiment en feu ou en ruine : on n'y entre pas. */

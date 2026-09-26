@@ -55,6 +55,9 @@ export const CONFIG = {
     mallEvery: 45,            // 1 centre commercial pour ~45 bâtiments (1 à 3)
     nightclubEvery: 50,       // 1 boîte de nuit pour ~50 bâtiments (1 à 3)
     schoolEvery: 25,          // 1 école pour ~25 bâtiments (1 à 3)
+    bankEvery: 50,            // 1 agence bancaire pour ~50 bâtiments (1 à 3)
+    barShare: 0.08,           // bars
+    shopShare: 0.07,          // boutiques et supérettes
     restaurantShare: 0.08,
     workShare: 0.25,
     capacityPerArea: 1 / 70,  // personnes par px² (hors logements, jamais pleins)
@@ -69,6 +72,12 @@ export const CONFIG = {
       mall: { days: [0, 1, 2, 3, 4, 5], slots: [[9, 20]] },
       restaurant: { days: [0, 1, 2, 3, 4, 5, 6], slots: [[11.5, 14.5], [18.5, 23.5]] },
       nightclub: { days: [4, 5], slots: [[23, 29]] }, // vendredi et samedi, 23 h - 5 h
+      bar: [
+        { days: [0, 1, 2, 3, 6], slots: [[16, 25]] }, // jusqu'à 1 h
+        { days: [4, 5], slots: [[16, 26]] },          // vendredi et samedi jusqu'à 2 h
+      ],
+      shop: { days: [0, 1, 2, 3, 4, 5], slots: [[9, 19.5]] },
+      bank: { days: [0, 1, 2, 3, 4], slots: [[9, 17]] }, // guichets ; le distributeur, lui, est toujours ouvert
     },
     // Multiplicateur du risque de contagion selon le lieu du contact
     transmission: {
@@ -83,6 +92,9 @@ export const CONFIG = {
       mall: 0.7,              // grand volume, contacts brefs
       restaurant: 1.6,        // sans masque, face à face, longue durée
       nightclub: 3,           // foule dense, parole forte, mauvaise ventilation
+      bar: 2,                 // on se rapproche, on parle fort, on trinque
+      shop: 0.5,              // passage bref
+      bank: 0.4,
       hospital: 0,            // protocoles sanitaires
       temple: 1.4,            // réunions de secte : on chante, serrés, pendant des heures
       ruin: 0,
@@ -147,7 +159,13 @@ export const CONFIG = {
       walk: { weight: 0.6, duration: [0.5, 2] },
       mall: { weight: 0.5, duration: [1, 3] },
       restaurant: { weight: 0.5, duration: [1, 2] },
+      bar: { weight: 0.45, duration: [1, 3] },
+      shop: { weight: 0.35, duration: [0.3, 0.8] },  // courses
+      atm: { weight: 3, duration: [0.05, 0.1] },     // retirer du liquide (quand on n'en a plus)
     },
+    // La soirée (après le travail et avant minuit) : apéro, dîner, promenade
+    evening: { from: 17.5, to: 23.5, bar: 2.5, restaurant: 1.8, walk: 0.8, visit: 1.3, home: 0.8 },
+    nightBarChance: 0.35,     // (× sociabilité) un couche-tard finit la soirée au bar en semaine
     sickLeisureFactor: 0.3,   // un malade qui ignore ses symptômes sort moins
     retryDelay: [0.5, 1.5],   // lieu complet : on flâne puis on réessaie (h)
     maxTravel: 5,             // au-delà (h), l'habitant est considéré arrivé
@@ -428,6 +446,91 @@ export const CONFIG = {
     maxTags: 160,
   },
 
+  /** Économie : argent des habitants, commerces, banques. Montants en euros, par jour de jeu. */
+  economy: {
+    medianWage: 130,          // €/jour de travail (salaire médian à 100 %)
+    wageSpread: 0.45,         // dispersion des salaires (log-normale)
+    pension: [65, 110],       // €/jour
+    welfareBase: 80,          // €/jour d'aides à 100 % (chômeurs, étudiants sans emploi)
+    livingCost: 45,           // €/jour et par adulte : loyer, factures, courses
+    childCost: 15,            // €/jour et par enfant, à la charge des adultes du foyer
+    savingsDays: [3, 45],     // épargne de départ, en jours de revenu
+    cashStart: [10, 120],     // liquide en poche au départ
+    cashShare: 0.45,          // part des achats payés en liquide (si on en a)
+    atmWhenBelow: 15,         // on va au distributeur sous ce montant en poche
+    atmWithdraw: [40, 160],
+    overdraft: -600,          // découvert maximal
+    poorBelow: 100,           // ménage précaire : moins que ça en banque
+    richAbove: 6000,
+    payHour: 18,              // salaires et aides versés chaque jour à cette heure
+    prices: {                 // € dépensés en entrant
+      restaurant: [12, 35], bar: [4, 22], mall: [15, 90], shop: [5, 40], nightclub: [10, 40],
+    },
+    bankVault: [60000, 160000],
+    shopDeposit: 19.5,        // heure à laquelle les commerçants déposent leur caisse à la banque
+    sampleInterval: 2,
+  },
+
+  /** Criminalité : délinquants, délits, police de proximité, justice. Durées en heures de jeu. */
+  crime: {
+    // Curseurs
+    criminality: { min: 0, max: 100, default: 25 },    // % : tendance de fond à la délinquance
+    unemployment: { min: 0, max: 50, default: 8 },     // % des actifs sans emploi
+    welfare: { min: 0, max: 100, default: 50 },        // % : générosité des aides sociales
+    wages: { min: 50, max: 200, default: 100, step: 10 }, // % du salaire médian
+    patrols: { min: 0, max: 30, default: 4 },          // patrouilles de police
+    lighting: { min: 0, max: 100, default: 50 },       // % : éclairage public (la nuit)
+    cameras: { min: 0, max: 100, default: 20 },        // % : vidéosurveillance (identification)
+    sentence: { min: 0.5, max: 10, default: 2, step: 0.5 }, // jours de prison
+    bankSecurity: { min: 0, max: 100, default: 60 },   // % : vigiles, coffres, alarmes
+    // Interrupteurs
+    bankHeists: true,         // des gangs braquent les banques
+    neighborhoodWatch: true,  // les voisins signalent les cambriolages
+    recidivism: true,         // la prison endurcit : un ancien détenu récidive plus
+
+    // Qui devient délinquant (recalculé chaque jour)
+    baseRate: 0.2,            // × criminalité × profil
+    poorFactor: 2.5,
+    unemployedFactor: 1.8,
+    welfareRelief: 0.5,       // les aides réduisent jusqu'à 50 % la délinquance de nécessité
+    recidivismFactor: 1.6,
+    seniorFactor: 0.3,
+    violentShare: 0.35,       // part des délinquants prêts à braquer ou agresser
+    // Délits (taux par heure, à réglages par défaut)
+    pickpocketRate: 0.5,      // dans la foule (≥ 3 personnes à portée)
+    crowdRadius: 25,
+    lurkChance: 0.35,         // un délinquant sort rôder la nuit
+    preyRadius: 60,
+    isolation: 40,            // px : personne d'autre autour de la victime
+    muggingRate: 3,           // au contact
+    muggingInjury: 0.25,
+    muggingDeath: 0.01,
+    burglaryChance: 0.25,     // en journée, un délinquant sans emploi part cambrioler
+    burglaryTime: [0.3, 0.7],
+    burglaryLoot: [150, 900],
+    robberyChance: 0.3,       // un délinquant violent braque une caisse bien remplie
+    minTill: 150,
+    heistChance: 0.2,         // / jour ouvré, si un gang peut se former
+    heistGang: [3, 5],
+    heistLoot: [0.1, 0.3],    // part du coffre
+    // Police
+    unitSpeed: 90,
+    deterrence: 70,           // px : aucun délit sous le nez d'une patrouille
+    arrestRate: 1.5,          // / s au contact d'un suspect recherché
+    shootout: 0.25,           // / s au contact de braqueurs : un tué d'un côté ou de l'autre
+    witnessReport: 0.35,      // la victime d'un vol à la tire s'en aperçoit et porte plainte
+    wantedFor: 72,            // h pendant lesquelles un suspect identifié est recherché
+    homeArrest: 0.25,         // / jour et par patrouille (× 1/10) : un suspect est cueilli chez lui
+    alarmFor: 3,              // h : la police converge vers un braquage
+    insecurityMemory: 24,
+    insecurityScale: 25,
+    weights: { pickpocket: 0.2, mugging: 2, burglary: 1.2, robbery: 3, heist: 8, murder: 5 },
+    sampleInterval: 1,
+    maxSamples: 300,
+    maxEvents: 50,
+    markLife: 10,
+  },
+
   navigation: {
     cellSize: 8,              // grille des champs de flux
     clearance: 4,             // rayon libre exigé pour qu'une case soit praticable
@@ -474,6 +577,14 @@ export const CONFIG = {
     firefighter: '#e8322b',
     firefighterStroke: '#ffd9d6',
     spray: 'rgba(140, 200, 255, 0.7)',
+    // Criminalité
+    criminal: '#ff4d6d',      // délinquant en action
+    wanted: '#ff1f3d',        // recherché
+    crimeMarks: {
+      pickpocket: '#f5d547', mugging: '#ff4d6d', burglary: '#ff9f43', robbery: '#ff2d2d', heist: '#ffffff',
+    },
+    streetLight: 'rgba(255, 214, 140, ALPHA)',
+    siren: ['#ff2d2d', '#2d7dff'],
     // Bâtiments par type : remplissage, bordure (et étiquettes)
     places: {
       home: { fill: '#2c3e50', stroke: '#34495e' },
@@ -483,6 +594,9 @@ export const CONFIG = {
       restaurant: { fill: '#3d2820', stroke: '#c0673a' },
       nightclub: { fill: '#2f1f3d', stroke: '#9b59d6' },
       hospital: { fill: '#4a2330', stroke: '#c0392b' },
+      bar: { fill: '#3a2230', stroke: '#e0588f' },
+      shop: { fill: '#2c3322', stroke: '#9cb84a' },
+      bank: { fill: '#22303d', stroke: '#e3c14b' },
       temple: { fill: '#2a1a33', stroke: '#7a4a8f' },
       ruin: { fill: '#161312', stroke: '#3b2a22' },
       street: { fill: '#1a1a1a', stroke: '#6b7580' },

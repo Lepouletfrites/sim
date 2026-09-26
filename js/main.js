@@ -54,7 +54,16 @@ const ui = new UI({
   onGuru: () => cultAction((c) => c.spawnGuru()),
   onPoliceRaid: () => cultAction((c) => c.forceRaid()),
   onResetCult: () => cultAction((c) => c.reset()),
+  onCrimeSetting: (name, value) => simulation.setCrimeSetting(name, value),
+  onHeist: () => crimeAction((c) => c.forceHeist()),
+  onResetCrime: () => crimeAction((c) => c.reset()),
 });
+
+function crimeAction(action) {
+  if (!simulation.crime) return;
+  action(simulation.crime);
+  refreshStats();
+}
 
 function zombieAction(action) {
   if (!simulation.zombies) return;
@@ -83,6 +92,9 @@ canvas.addEventListener('click', (event) => {
       break;
     case 'fire':
       cultAction((c) => c.fireAt(x, y));
+      break;
+    case 'thief':
+      crimeAction((c) => c.makeCriminal(x, y));
       break;
     default:
       if (simulation.epidemic && simulation.epidemic.infectAt(x, y, 30)) refreshStats();

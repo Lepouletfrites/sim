@@ -380,7 +380,7 @@ export class Zombies {
   lootTargetFor(c) {
     const city = this.city;
     const from = c.home >= 0 ? city.buildings[c.home] : { x: c.x, y: c.y, w: 0, h: 0 };
-    for (const type of [PlaceType.MALL, PlaceType.RESTAURANT]) {
+    for (const type of [PlaceType.MALL, PlaceType.SHOP, PlaceType.RESTAURANT]) {
       let best = -1;
       let bestD2 = Infinity;
       for (const i of city.byType[type]) {

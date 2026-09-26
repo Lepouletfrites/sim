@@ -64,9 +64,11 @@ const PREACH_VENUES = [
   [PlaceType.RESTAURANT, 1.5],
   [PlaceType.WORK, 1],
   [PlaceType.NIGHTCLUB, 1],
+  [PlaceType.SHOP, 1],
+  [PlaceType.BAR, 1],
   [PlaceType.HOSPITAL, 0.5],
 ];
-const RAID_TARGETS = { mall: 3, restaurant: 2, nightclub: 2, work: 1.5, home: 1 };
+const RAID_TARGETS = { mall: 3, restaurant: 2, nightclub: 2, bar: 2, bank: 2, shop: 1.5, work: 1.5, home: 1 };
 /** Activités qu'on interrompt volontiers pour une réunion. */
 const FREE_TIME = new Set(['home', 'walk', 'mall', 'restaurant', 'visit', 'sleep', 'preach']);
 
@@ -122,7 +124,7 @@ export class Cult {
     this.tickId = 0;
     this.insecurity = 0;
     this.incidentScore = 0;
-    this.routine.insecurity = 0;
+    this.routine.cultInsecurity = 0;
     this.totals = {
       fires: 0, ruins: 0, saved: 0, assaults: 0, vandalism: 0, raids: 0,
       killed: { assault: 0, fire: 0, brawl: 0 }, arrests: 0, policeRaids: 0,
@@ -998,7 +1000,10 @@ export class Cult {
         c.home = moved.get(c.household);
       }
       if (c.formerHome === index) c.formerHome = city.pickPlace(PlaceType.HOME, this.rng);
-      if (c.work === index) c.work = city.pickPlace(PlaceType.WORK, this.rng);
+      if (c.job === index) c.job = city.pickPlace(PlaceType.WORK, this.rng);
+      if (c.work === index) {
+        c.work = c.age === 'child' ? city.nearestPlaceByPath(PlaceType.SCHOOL, c.home) : c.job;
+      }
     }
   }
 
@@ -1329,7 +1334,7 @@ export class Cult {
     const cfg = CONFIG.cult;
     this.incidentScore *= 0.5 ** (hours / cfg.insecurityMemory);
     this.insecurity = 1 - Math.exp(-this.incidentScore / cfg.insecurityScale);
-    this.routine.insecurity = this.insecurity;
+    this.routine.cultInsecurity = this.insecurity;
   }
 
   // ------------------------------------------------------------ Police

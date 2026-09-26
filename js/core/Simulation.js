@@ -5,6 +5,8 @@ import { Routine } from '../agents/Routine.js';
 import { Epidemic } from '../epidemic/Epidemic.js';
 import { Zombies, defaultZombieSettings } from '../zombie/Zombies.js';
 import { Cult, defaultCultSettings } from '../cult/Cult.js';
+import { Economy } from '../crime/Economy.js';
+import { Crime, defaultCrimeSettings } from '../crime/Crime.js';
 
 /**
  * Orchestre le temps simulé : timeScale + accumulateur à pas fixe.
@@ -24,6 +26,9 @@ export class Simulation {
     this.zombieSettings = defaultZombieSettings();
     this.cult = null;
     this.cultSettings = defaultCultSettings();
+    this.economy = null;
+    this.crime = null;
+    this.crimeSettings = defaultCrimeSettings();
     this.timeScale = CONFIG.simulation.defaultTimeScale;
     this.accumulator = 0;
     this.tickTimer = 0;
@@ -62,6 +67,8 @@ export class Simulation {
       this.population, city, this.clock, this.routine, seed, this.cultSettings, this.epidemic, this.zombies,
     );
     this.population.cult = this.cult;
+    this.economy = new Economy(this.population, city, this.clock, this.routine, seed, this.crimeSettings);
+    this.crime = new Crime(this.population, city, this.clock, this.routine, seed, this.crimeSettings, this.economy);
     this.accumulator = 0;
     this.tickTimer = 0;
     this.alpha = 0;
@@ -77,6 +84,15 @@ export class Simulation {
     this.epidemic.recount();
     this.zombies.recount();
     this.cult.onPopulationChanged();
+    this.crime.onPopulationChanged();
+  }
+
+  /** Réglage de l'onglet Crime (déjà converti : 0..1, nombre ou booléen). */
+  setCrimeSetting(name, value) {
+    this.crimeSettings[name] = value;
+    if (!this.crime) return;
+    if (name === 'unemployment') this.economy.applyEmployment();
+    if (['criminality', 'unemployment', 'welfare', 'recidivism'].includes(name)) this.crime.updateRoster();
   }
 
   /** Réglage des sectes (déjà converti : 0..1, nombre ou booléen). */
@@ -113,12 +129,14 @@ export class Simulation {
       this.population.step(fixedDt);
       this.zombies.step(fixedDt);
       this.cult.step(fixedDt);
+      this.crime.step(fixedDt);
       this.tickTimer += fixedDt;
       if (this.tickTimer >= tickInterval) {
         this.tickTimer -= tickInterval;
         this.epidemic.tick(tickInterval);
         this.zombies.tick(tickInterval);
         this.cult.tick(tickInterval);
+        this.crime.tick(tickInterval);
         this.routine.tick();
       }
       this.accumulator -= fixedDt;

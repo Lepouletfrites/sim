@@ -50,11 +50,17 @@ export function rollTraits(citizen, rng, city, age) {
     return;
   }
 
-  citizen.work = rng.chance(profile.employment) ? city.pickPlace(PlaceType.WORK, rng) : -1;
+  // Actif (emploi attitré) ou non (étudiant, retraité, au foyer). Le chômage, réglable,
+  // prive d'emploi une part des actifs : ceux dont le `jobRank` est le plus bas (voir Economy).
+  citizen.job = rng.chance(profile.employment) ? city.pickPlace(PlaceType.WORK, rng) : -1;
+  citizen.jobRank = rng.next();
+  citizen.work = citizen.job;
   citizen.workStart = range(cfg.workStart);
   citizen.workEnd = citizen.workStart + range(cfg.workDuration);
   citizen.worksSaturday = rng.chance(cfg.saturdayWork);
   citizen.nightOwl = age !== 'senior' && citizen.sociability > cfg.nightOwlSociability;
+  citizen.crimeRoll = rng.next();
+  citizen.cashHabit = age === 'senior' ? rng.range(0.4, 0.9) : rng.range(0.1, 0.7);
   // Crédulité : les jeunes et les isolés (peu sociables) se laissent plus facilement embrigader.
   citizen.gullibility = clamp01(rng.next() * 0.85 + (age === 'young' ? 0.12 : 0) + (0.5 - citizen.sociability) * 0.1);
 }

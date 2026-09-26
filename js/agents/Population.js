@@ -192,6 +192,15 @@ export class Population {
           if (c.threat !== null && !c.fighter) speed *= panicBoost;
         } else if (c.prey !== null && this.cult !== null && this.cult.steer(c)) {
           // Fanatique qui suit un passant dans la nuit.
+        } else if (c.mark !== null && c.mark.alive && c.mark.place < 0) {
+          // Voleur qui file sa victime.
+          const dx = c.mark.x - c.x;
+          const dy = c.mark.y - c.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1e-6) {
+            c.dirX = dx / d;
+            c.dirY = dy / d;
+          }
         } else if (c.hold) {
           speed = 0; // prêche, écoute, attroupement devant la cible d'un raid
         } else if (c.field !== null && c.field.steer(c)) {

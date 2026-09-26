@@ -2,6 +2,7 @@ import { CONFIG } from '../config.js';
 import { EpidemicChart, CHART_BANDS } from './EpidemicChart.js';
 import { ZombiePanel } from './ZombiePanel.js';
 import { CultPanel } from './CultPanel.js';
+import { CrimePanel } from './CrimePanel.js';
 import { PlaceType, STREET, PLACE_LABELS, describeSchedule, isOpen } from '../world/PlaceTypes.js';
 import { CONTAGION_PLACES } from '../epidemic/Epidemic.js';
 import { Health } from '../agents/Citizen.js';
@@ -15,7 +16,8 @@ const POLICIES = ['closeNightclubs', 'closeCommerce', 'closeSchools', 'telework'
 const formatDays = (v) => (v === 0 ? 'à vie' : `${v} j`);
 const CITY_SLIDERS = ['density', 'chaos', 'green'];
 const PLACES_SHOWN = [
-  PlaceType.HOME, PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.RESTAURANT,
+  PlaceType.HOME, PlaceType.WORK, PlaceType.SCHOOL, PlaceType.MALL, PlaceType.SHOP, PlaceType.RESTAURANT,
+  PlaceType.BAR, PlaceType.BANK,
   PlaceType.NIGHTCLUB, PlaceType.HOSPITAL, PlaceType.TEMPLE, STREET,
 ];
 /** Action du clic sur la carte (les boutons [data-click] de tous les onglets restent synchronisés). */
@@ -25,6 +27,7 @@ const CLICK_HINTS = {
   strike: 'Clic sur la carte : frappe aérienne (rayon 45 px, humains compris)',
   guru: 'Clic sur la carte : l\'habitant le plus proche fonde une secte',
   fire: 'Clic sur la carte : mettre le feu au bâtiment',
+  thief: 'Clic sur la carte : l\'habitant le plus proche bascule dans la délinquance',
 };
 /** Compteurs affichés tels quels : clé de `epidemic.counts` = suffixe de l'id. */
 const COUNTS = [
@@ -113,7 +116,11 @@ export class UI {
     onGuru,
     onPoliceRaid,
     onResetCult,
+    onCrimeSetting,
+    onHeist,
+    onResetCrime,
   }) {
+    this.crimePanel = new CrimePanel({ onSetting: onCrimeSetting, onHeist, onReset: onResetCrime });
     this.zombiePanel = new ZombiePanel({
       onSetting: onZombieSetting,
       onRelease: onReleaseZombie,
@@ -138,6 +145,8 @@ export class UI {
       kpiZombiesBox: $('#kpi-zombies-box'),
       kpiCult: $('#kpi-cult'),
       kpiCultBox: $('#kpi-cult-box'),
+      kpiCrime: $('#kpi-crime'),
+      kpiCrimeBox: $('#kpi-crime-box'),
       hint: $('#legend-hint'),
       pauseBadge: $('#pause-badge'),
       active: $('#stat-active'),
@@ -476,6 +485,15 @@ export class UI {
       this.el.kpiCultBox.hidden = !cult.active;
       this.el.kpiCult.textContent = cult.counts.members;
       this.cultPanel.update(cult);
+    }
+
+    // Crime et économie
+    const crime = simulation.crime;
+    if (crime) {
+      const recent = crime.recent.total ?? 0;
+      this.el.kpiCrimeBox.hidden = recent === 0;
+      this.el.kpiCrime.textContent = recent;
+      this.crimePanel.update(crime, simulation.economy);
     }
   }
 

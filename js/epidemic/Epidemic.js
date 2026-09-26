@@ -8,7 +8,8 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 /** Lieux où l'on peut être contaminé (pour la répartition "où se contamine-t-on"). */
 export const CONTAGION_PLACES = [
-  PlaceType.HOME, PlaceType.SCHOOL, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.NIGHTCLUB, STREET,
+  PlaceType.HOME, PlaceType.SCHOOL, PlaceType.WORK, PlaceType.MALL, PlaceType.RESTAURANT, PlaceType.BAR,
+  PlaceType.NIGHTCLUB, STREET,
 ];
 
 /**

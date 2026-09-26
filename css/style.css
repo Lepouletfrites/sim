@@ -276,8 +276,8 @@ kbd {
 
 .legend-box__body {
   display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 4px 20px;
+  grid-template-columns: repeat(5, auto);
+  gap: 4px 18px;
 }
 
 .legend-box h4 {
@@ -340,7 +340,7 @@ kbd {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   padding: 0 12px;
   border-bottom: 1px solid var(--border);
 }
@@ -1425,11 +1425,78 @@ input[type="range"] {
   font-style: italic;
 }
 
+/* ================================ Crime ================================= */
+
+.tabs__btn--crime[aria-selected="true"] {
+  border-bottom-color: #ff4d6d;
+}
+
+.mini--crime {
+  --mark: #ff4d6d;
+}
+
+.mini--crime b::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  transform: rotate(45deg);
+  vertical-align: middle;
+  background: var(--mark);
+}
+
+.btn--crime {
+  color: #2a070e;
+  border-color: #ff4d6d;
+  background: #ff4d6d;
+}
+
+.btn--crime:hover {
+  background: #ff6f88;
+  border-color: #ff6f88;
+}
+
+.log li[data-kind="crime"] { --log-color: #ff9f43; }
+
+.dot--ring-thief {
+  background: #3498db;
+  box-shadow: 0 0 0 1.5px var(--bg-card), 0 0 0 2.5px #ff4d6d;
+  outline: 1px dashed rgba(255, 77, 109, 0.6);
+  outline-offset: 2px;
+}
+
+.dot--ring-wanted {
+  background: #3498db;
+  --ring-color: #ff1f3d;
+}
+
+.unit--crime {
+  width: 7px;
+  height: 7px;
+  margin: 0 2px;
+  background: #ff9f43;
+  transform: rotate(45deg);
+}
+
+.unit--lamp {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 140, 0.9) 0 20%, rgba(255, 214, 140, 0) 70%);
+}
+
 /* ============================== Responsive ============================== */
 
 @media (max-width: 1100px) {
   .toolbar__kpis .mini:first-child {
     display: none;
+  }
+}
+
+@media (max-width: 1360px) {
+  .legend-box__body {
+    grid-template-columns: repeat(3, auto);
   }
 }
 

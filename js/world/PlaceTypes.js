@@ -8,6 +8,9 @@ export const PlaceType = Object.freeze({
   MALL: 'mall',
   RESTAURANT: 'restaurant',
   NIGHTCLUB: 'nightclub',
+  BAR: 'bar',
+  SHOP: 'shop',
+  BANK: 'bank',
   HOSPITAL: 'hospital',
   TEMPLE: 'temple', // bâtiment acheté par une secte
   RUIN: 'ruin',     // bâtiment détruit par le feu
@@ -23,6 +26,9 @@ export const PLACE_LABELS = {
   mall: 'Centre commercial',
   restaurant: 'Restaurants',
   nightclub: 'Boîte de nuit',
+  bar: 'Bars',
+  shop: 'Boutiques',
+  bank: 'Banque',
   hospital: 'Hôpital',
   temple: 'Locaux de secte',
   ruin: 'Ruines',
@@ -35,6 +41,9 @@ export const MAP_LABELS = {
   mall: 'CENTRE CO.',
   restaurant: 'RESTO',
   nightclub: 'CLUB',
+  bar: 'BAR',
+  shop: 'BOUTIQUE',
+  bank: 'BANQUE',
 };
 
 /** Horaires d'un type : une ou plusieurs règles { days, slots }, ou null (toujours ouvert). */
@@ -51,7 +60,8 @@ function scheduleOf(type) {
 export function isOpen(type, clock, policies) {
   if (policies) {
     if (type === PlaceType.NIGHTCLUB && policies.closeNightclubs) return false;
-    if ((type === PlaceType.MALL || type === PlaceType.RESTAURANT) && policies.closeCommerce) return false;
+    if ((type === PlaceType.MALL || type === PlaceType.RESTAURANT || type === PlaceType.BAR ||
+      type === PlaceType.SHOP) && policies.closeCommerce) return false;
     if (type === PlaceType.SCHOOL && policies.closeSchools) return false;
   }
   const rules = scheduleOf(type);

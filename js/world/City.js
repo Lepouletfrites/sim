@@ -110,6 +110,10 @@ export class City {
       // Écoles : bâtiments moyens à grands, répartis (chaque enfant va à la plus proche)
       take(free.slice(0, Math.max(1, Math.floor(free.length / 2))), count(cfg.schoolEvery), PlaceType.SCHOOL);
       take(free.slice(Math.floor(free.length / 2)), Math.max(2, Math.round(n * cfg.restaurantShare)), PlaceType.RESTAURANT);
+      // Vie nocturne et commerces de proximité : petits bâtiments ; agences bancaires : moyens
+      take(free.slice(Math.floor(free.length / 3)), Math.max(2, Math.round(n * cfg.barShare)), PlaceType.BAR);
+      take(free.slice(Math.floor(free.length / 2)), Math.max(2, Math.round(n * cfg.shopShare)), PlaceType.SHOP);
+      take(free.slice(Math.floor(free.length / 4), Math.floor((3 * free.length) / 4)), count(cfg.bankEvery), PlaceType.BANK);
       // Bureaux : tirage pondéré par la surface
       const weighted = [...free].sort((a, b) => area(b) * rng.range(0.3, 1.7) - area(a) * rng.range(0.3, 1.7));
       take(weighted.slice(0, Math.round(n * cfg.workShare * 1.5)), Math.round(n * cfg.workShare), PlaceType.WORK);

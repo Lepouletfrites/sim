@@ -5,13 +5,14 @@ Simulation urbaine interactive en **Vanilla JavaScript** (modules ES, Canvas 2D)
 ## Interface
 
 - **Barre d'outils** au-dessus de la carte : horloge (jour, heure, jour/nuit), vitesse de simulation, chiffres clés (habitants, infectés, décès, zombies, fidèles).
-- **Carte** avec une légende repliable en quatre colonnes (virus, zombies, sectes, bâtiments). L'action du clic se choisit dans l'onglet Zombies ou Sectes.
-- **Panneau latéral** : quatre onglets, chacun découpé en sous-onglets courts (onglet et sous-onglets mémorisés) :
+- **Carte** avec une légende repliable (virus, zombies, sectes, crime, bâtiments). L'action du clic se choisit dans les onglets Zombies, Sectes ou Crime.
+- **Panneau latéral** : cinq onglets, chacun découpé en sous-onglets courts (onglet et sous-onglets mémorisés) :
 
 | Onglet | Sous-onglets |
 |---|---|
 | **Virus** | **Suivi** : indicateurs, actions, courbe, état de santé, soins, lieux de contamination · **Réglages** : virus, comportements, mesures sanitaires |
 | **Zombies** | **Suivi** : état de l'apocalypse, actions et clic, courbe, survivants, remède, journal · **Riposte** : police, barricades de rue, armée · **Réglages** : morsure, zombies, humains, barricades et vivres, remède, règles farfelues |
+| **Crime** | **Suivi** : état, délits sur 24 h, sentiment d'insécurité, bilan, main courante · **Économie** : épargne, liquide, chiffre d'affaires, niveaux de vie, flux · **Réglages** : société (criminalité, chômage, aides, salaires), sécurité (patrouilles, éclairage, vidéosurveillance, peines, banques), règles |
 | **Sectes** | **Suivi** : état, actions et clic, fiche de chaque secte, courbe des fidèles, bilan, journal · **Riposte** : police, descente au QG, pompiers · **Réglages** : recrutement, emprise, croissance, chaos, règles farfelues |
 | **Ville** | Génération (population, densité, désordre, espaces verts, rivière, graine), lieux et horaires |
 
@@ -40,6 +41,9 @@ Une horloge fait défiler les jours de la semaine (1 h de jeu = 8 s à x1, 1 jou
 | Centre commercial | Lun–Sam 9h–20h | ×0,7 (grand volume, contacts brefs) |
 | Restaurants | tous les jours, 11h30–14h30 et 18h30–23h30 | ×1,6 (face à face, sans masque) |
 | Boîte de nuit | Ven–Sam 23h–5h | ×3 (foule dense, parole forte) |
+| Bars | tous les jours 16h–1h (2h le vendredi et le samedi) | ×2 (on se rapproche, on trinque) |
+| Boutiques | Lun–Sam 9h–19h30 | ×0,5 (passage bref) |
+| Banque | guichets Lun–Ven 9h–17h ; distributeur toujours ouvert | ×0,4 |
 | Hôpital | toujours (6 lits pour 100 habitants, 10 au minimum) | nul (protocoles sanitaires) |
 | Rue et places | — | ×0,3 (air libre) |
 
@@ -53,6 +57,7 @@ Chaque habitant a aussi un profil tiré à la naissance :
 - **Âge** : enfants, jeunes, adultes, seniors. L'âge détermine l'emploi ou l'école, les heures de lever et de coucher, la fragilité, la sociabilité et la prudence.
 - **Enfants** : plus petits et un peu plus lents, ils vont à l'**école la plus proche à pied** (ponts compris), partent vers 7h30 et attendent l'ouverture devant la porte, restent à la cantine, et sont libres le mercredi après-midi et le week-end. Pas de sorties nocturnes, pas de secte ; en cas d'alerte zombie, les parents les gardent à la maison.
 - **Emploi** : bureau, horaires d'embauche de 7h30 à 9h30, 15 % travaillent le samedi, 30 % déjeunent au restaurant.
+- **Soirées** : après le travail, on va boire un verre au bar, dîner au restaurant, se promener ou voir des amis ; les couche-tard finissent au bar en semaine et en boîte le week-end. Mais quand l'**insécurité** monte, les rues se vident le soir (de 377 à 263 personnes dehors à 21 h dans une ville livrée aux délinquants).
 - **Amis** : chacun a 2 à 7 amis (réciproques), choisis de préférence du même âge, du même quartier, collègues ou camarades de classe. On leur **rend visite** chez eux, et on sort rarement seul : un ami libre vient au restaurant ou au centre commercial. Ces liens portent le virus d'un foyer à l'autre, et les sectes s'en servent pour recruter.
 - **Temps libre** : maison, promenade, centre commercial ou restaurant, selon l'heure, le jour et la sociabilité. On choisit plutôt le lieu le plus proche.
 - **Noctambules** : environ 1 jeune sur 2 et 1 adulte sur 4 sortent en boîte le vendredi et le samedi.
@@ -118,6 +123,39 @@ Avec les réglages par défaut (600 habitants, un patient zéro), trois villes d
 | 1 | La ville vacille pendant 3 jours ; l'armée arrive au jour 4 et nettoie tout | 60 |
 | 2 | La police contient l'invasion dès le premier jour | 474 |
 | 3 | Guerre d'usure avec des pillages ; le remède arrive au jour 4 | 368 |
+
+### Économie et criminalité
+
+**L'argent** (en euros) :
+- Chaque adulte a du **liquide en poche** et un **compte en banque**. Les actifs touchent leur **salaire** les jours travaillés (salaire médian de 130 €, très variable), les retraités une **pension**, les chômeurs et étudiants des **aides sociales**. Loyer, factures et courses (et les enfants) sont prélevés chaque nuit ; un foyer met ses revenus en commun.
+- On **dépense** en entrant au restaurant, au bar, au centre commercial, dans une boutique ou en boîte, en liquide (qui finit dans la **caisse** du commerce) ou par carte. Quand on n'a plus de liquide, on passe au **distributeur** de la banque. Le soir, les commerçants déposent leur caisse au **coffre** de la banque.
+- Le **chômage** (curseur) prive d'emploi une part des actifs : ils ne vont plus au bureau et vivent des aides. Niveaux de vie selon l'épargne : précaire, modeste, aisé, riche (environ 12 % d'adultes précaires par défaut, surtout des étudiants seuls).
+
+**Qui devient délinquant** (recalculé toutes les 6 h) : une petite part des habitants (environ 3 % par défaut), d'autant plus que la **criminalité** de fond est haute, que la personne est peu civique, **précaire** (×2,5) ou **au chômage** (×1,8). Les **aides sociales** réduisent la délinquance de nécessité ; avec la **récidive**, un ancien détenu retombe plus facilement. Un tiers sont violents. Jamais les enfants.
+
+| Délit | Quand, où | Butin |
+|---|---|---|
+| **Vol à la tire** | dans la foule : centre commercial, bars, boîte, restaurant, rue animée | une partie du liquide |
+| **Agression** | la nuit : un rôdeur file un passant isolé, de préférence à la sortie du distributeur | tout le liquide ; blessure (25 %), rarement la mort |
+| **Cambriolage** | en journée, par un délinquant sans emploi, dans un logement vide ; interrompu si l'habitant rentre | bijoux et objets revendus à perte |
+| **Braquage de commerce** | par un violent, en fin de journée (boutique) ou tard le soir (bar, restaurant), quand la caisse est pleine | la caisse |
+| **Braquage de banque** | un gang de 3 à 5, un jour ouvré ; plus ou moins réussi selon la sécurité des banques | une part du coffre |
+
+**Riposte et société** :
+- Les **patrouilles** sillonnent les points chauds (lieux des derniers délits, bars la nuit, banques), **dissuadent** (aucun délit sous leur nez), foncent gyrophare allumé sur les **alarmes** (braquages, cambrioleur surpris) et interpellent les **suspects recherchés** qu'elles croisent. Les braqueurs sont armés : **fusillades** possibles.
+- Un délit dont l'auteur est **identifié** (victime, témoin, **voisins vigilants**, **vidéosurveillance**) en fait un suspect recherché pendant 3 jours ; les enquêteurs finissent souvent par le cueillir chez lui.
+- L'**éclairage public** réduit les rôdeurs et les agressions la nuit, et aide les caméras. Les **peines** (triplées pour un braqueur) envoient les condamnés au commissariat ; le butin est saisi.
+- Les victimes deviennent plus prudentes et gardent moins de liquide sur elles. Le **sentiment d'insécurité** vide les rues le soir.
+
+Effet des jauges (même ville de 600 habitants, 4 jours, une simulation par ligne ; ce sont des ordres de grandeur, les résultats varient d'une partie à l'autre) :
+
+| Réglage | Vols à la tire | Agressions | Cambriolages | Braquages | Insécurité |
+|---|---|---|---|---|---|
+| Par défaut | 37 | 5 | 4 | 6 + 1 banque | 32 % |
+| Sans police, sans éclairage ni caméras | 71 | 19 | 16 | 7 | 67 % |
+| 15 patrouilles, éclairage et caméras au maximum | 37 | 1 | 6 | 1 + 1 banque | 23 % |
+
+Une crise sociale (30 % de chômage, aucune aide) fait passer la ville de 87 à 129 délits en 5 jours, avec deux fois plus de cambriolages.
 
 ### Sectes
 
@@ -212,6 +250,10 @@ Avec les amitiés et les visites, les foyers ne sont plus isolés et le virus ci
 | Bâtiment liseré de couleur, « QG » / « ANNEXE » | Locaux d'une secte |
 | Flammes et fumée | Incendie ; bâtiment noirci : ruine |
 | Carré rouge | Pompiers (pointillés bleus : jet d'eau) |
+| Anneau rouge pointillé / plein | Délinquant en action / suspect recherché |
+| Rond bleu cerclé de blanc, halo rouge et bleu | Patrouille (gyrophare : en intervention ou en poursuite) |
+| Petit losange coloré | Délit récent (jaune : vol à la tire, rose : agression, orange : cambriolage, rouge : braquage) |
+| Halos jaunes la nuit | Lampadaires (plus nombreux avec l'éclairage public) |
 | Couleur du bâtiment | Type de lieu (voir le panneau Lieux) |
 
 Infection d'un habitant au clic sur la carte, bouton ou touche `I` ; courbe de l'épidémie au fil des jours, avec info-bulle.
@@ -247,6 +289,10 @@ js/
 │   ├── ZombieState.js      États (humain, mordu, zombie...)
 │   ├── Zombies.js          Apocalypse : chasse, combats, sièges, foyers, remède, journal
 │   └── Response.js         Riposte : police, barricades de rue, armée
+├── crime/
+│   ├── Economy.js          Salaires, aides, charges, achats, distributeurs, caisses et coffres
+│   ├── Crime.js            Délinquants, vols, agressions, cambriolages, braquages, justice
+│   └── CrimePolice.js      Patrouilles : points chauds, alarmes, poursuites, interpellations
 ├── cult/
 │   ├── Cult.js             Sectes : prêches, conversions, QG, gangs, raids, prophétie, journal
 │   ├── Fires.js            Incendies : propagation, extinction, ruines
@@ -259,6 +305,7 @@ js/
     ├── UI.js               Barre d'outils, onglets, légende et raccourcis clavier
     ├── ZombiePanel.js      Onglet Zombies
     ├── CultPanel.js        Onglet Sectes
+    ├── CrimePanel.js       Onglet Crime (dont l'économie)
     └── EpidemicChart.js    Courbe de l'épidémie (aire empilée)
 ```
 

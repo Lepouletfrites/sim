@@ -35,6 +35,7 @@
           <div class="mini mini--dead"><span>Décès</span><b id="kpi-dead">0</b></div>
           <div class="mini mini--zombie" id="kpi-zombies-box" hidden><span>Zombies</span><b id="kpi-zombies">0</b></div>
           <div class="mini mini--cult" id="kpi-cult-box" hidden><span>Fidèles</span><b id="kpi-cult">0</b></div>
+          <div class="mini mini--crime" id="kpi-crime-box" hidden title="Délits des dernières 24 h"><span>Délits 24 h</span><b id="kpi-crime">0</b></div>
         </div>
       </header>
 
@@ -80,6 +81,16 @@
               </ul>
             </div>
             <div>
+              <h4>Crime</h4>
+              <ul>
+                <li><i class="dot dot--ring dot--ring-thief"></i>Délinquant en action</li>
+                <li><i class="dot dot--ring dot--ring-wanted"></i>Recherché</li>
+                <li><i class="unit unit--police"></i>Patrouille</li>
+                <li><i class="unit unit--crime"></i>Délit récent</li>
+                <li><i class="unit unit--lamp"></i>Éclairage</li>
+              </ul>
+            </div>
+            <div>
               <h4>Bâtiments</h4>
               <ul>
                 <li><i class="swatch" data-place="home"></i>Logement</li>
@@ -88,6 +99,9 @@
                 <li><i class="swatch" data-place="mall"></i>Centre co.</li>
                 <li><i class="swatch" data-place="restaurant"></i>Restaurant</li>
                 <li><i class="swatch" data-place="nightclub"></i>Boîte de nuit</li>
+                <li><i class="swatch" data-place="bar"></i>Bar</li>
+                <li><i class="swatch" data-place="shop"></i>Boutique</li>
+                <li><i class="swatch" data-place="bank"></i>Banque</li>
                 <li><i class="swatch" data-place="hospital"></i>Hôpital</li>
                 <li><i class="swatch" data-place="ruin"></i>Ruines</li>
                 <li><i class="swatch swatch--closed"></i>Fermé</li>
@@ -110,6 +124,7 @@
         <button type="button" class="tabs__btn" role="tab" id="tab-btn-virus" aria-controls="tab-virus" data-tab="virus">Virus</button>
         <button type="button" class="tabs__btn tabs__btn--zombie" role="tab" id="tab-btn-zombies" aria-controls="tab-zombies" data-tab="zombies">Zombies</button>
         <button type="button" class="tabs__btn tabs__btn--cult" role="tab" id="tab-btn-cult" aria-controls="tab-cult" data-tab="cult">Sectes</button>
+        <button type="button" class="tabs__btn tabs__btn--crime" role="tab" id="tab-btn-crime" aria-controls="tab-crime" data-tab="crime">Crime</button>
         <button type="button" class="tabs__btn" role="tab" id="tab-btn-city" aria-controls="tab-city" data-tab="city">Ville</button>
       </nav>
 
@@ -696,6 +711,188 @@
             </div>
 
             <button type="button" class="btn btn--block" id="btn-reset-cult">Dissoudre les sectes (tout réinitialiser)</button>
+          </div>
+        </section>
+
+        <!-- =============================== CRIME =============================== -->
+        <section class="tabpanel" id="tab-crime" role="tabpanel" aria-labelledby="tab-btn-crime" hidden>
+          <div class="subtabs" role="tablist" aria-label="Crime">
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-crime-follow" aria-controls="sub-crime-follow" data-subtab="crime-follow">Suivi</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-crime-economy" aria-controls="sub-crime-economy" data-subtab="crime-economy">Économie</button>
+            <button type="button" role="tab" class="subtabs__btn" id="sub-btn-crime-settings" aria-controls="sub-crime-settings" data-subtab="crime-settings">Réglages</button>
+          </div>
+
+          <!-- Crime · Suivi -->
+          <div class="subpanel" id="sub-crime-follow" role="tabpanel" aria-labelledby="sub-btn-crime-follow">
+            <div class="status" id="crime-status" data-level="calm">
+              <strong id="crime-status-title">Ville tranquille</strong>
+              <span id="crime-status-text">Quelques incivilités, rien de plus.</span>
+            </div>
+
+            <div class="tiles">
+              <div class="tile"><span class="tile__label">Délits (24 h)</span><span class="tile__value" id="crstat-recent">0</span></div>
+              <div class="tile"><span class="tile__label">Butin (24 h)</span><span class="tile__value" id="crstat-stolen">0 €</span></div>
+              <div class="tile"><span class="tile__label">Délinquants</span><span class="tile__value" id="crstat-criminals">0</span></div>
+              <div class="tile"><span class="tile__label">En prison</span><span class="tile__value" id="crstat-jailed">0</span></div>
+            </div>
+
+            <div class="card">
+              <h3>Déclencher</h3>
+              <div class="actions">
+                <button type="button" class="btn btn--crime" id="btn-heist">Braquage de banque</button>
+                <button type="button" class="btn" id="btn-reset-crime">Remettre à zéro</button>
+              </div>
+              <div class="control__row control__row--spaced"><span>Clic sur la carte</span></div>
+              <div class="segmented" role="radiogroup" aria-label="Action du clic sur la carte">
+                <button type="button" role="radio" data-click="thief">Délinquant</button>
+                <button type="button" role="radio" data-click="fire">Incendie</button>
+                <button type="button" role="radio" data-click="infect">Virus</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="meter">
+                <div class="meter__row"><span>Sentiment d'insécurité</span><b id="crstat-insecurity">0 %</b></div>
+                <div class="meter__track"><div class="meter__fill meter__fill--insecurity" id="meter-crime-insecurity"></div></div>
+              </div>
+              <p class="note">Il vide les rues le soir : moins de sorties au bar ou au restaurant, surtout chez les prudents.</p>
+            </div>
+
+            <div class="card">
+              <div class="card__head">
+                <h3>Délits sur 24 h glissantes</h3>
+                <ul class="chips" id="crime-chart-legend"></ul>
+              </div>
+              <div class="chart">
+                <canvas id="crime-chart" aria-label="Nombre de délits sur les dernières 24 heures, par type"></canvas>
+                <div class="chart__tooltip" id="crime-chart-tooltip" hidden></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Bilan</h3>
+              <ul class="rows" id="crime-rows"></ul>
+              <ul class="rows">
+                <li>Butin total<b id="crstat-stolenTotal">0 €</b></li>
+                <li>Interpellations<b id="crstat-arrests">0</b></li>
+                <li>Taux d'élucidation<b id="crstat-clearance">—</b></li>
+                <li><i class="dot dot--ring dot--ring-wanted"></i>Suspects recherchés<b id="crstat-wanted">0</b></li>
+                <li><i class="dot dot--ring dot--ring-thief"></i>En action en ce moment<b id="crstat-active">0</b></li>
+                <li>Morts (agressions, fusillades)<b id="crstat-killed">0</b></li>
+                <li>Policiers touchés<b id="crstat-officers">0</b></li>
+              </ul>
+            </div>
+
+            <div class="card">
+              <h3>Main courante</h3>
+              <ol class="log" id="crime-log">
+                <li class="log__empty">Rien à signaler… pour l'instant.</li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- Crime · Économie -->
+          <div class="subpanel" id="sub-crime-economy" role="tabpanel" aria-labelledby="sub-btn-crime-economy" hidden>
+            <div class="tiles">
+              <div class="tile"><span class="tile__label">Épargne des habitants</span><span class="tile__value" id="ecstat-bank">0 €</span></div>
+              <div class="tile"><span class="tile__label">Liquide en poche</span><span class="tile__value" id="ecstat-cash">0 €</span></div>
+              <div class="tile"><span class="tile__label">Chiffre d'affaires (hier)</span><span class="tile__value" id="ecstat-revenue">0 €</span></div>
+              <div class="tile"><span class="tile__label">Chômeurs</span><span class="tile__value" id="ecstat-unemployed">0</span></div>
+            </div>
+
+            <div class="card">
+              <h3>Niveau de vie</h3>
+              <div class="stackbar" id="wealth-bar" aria-hidden="true"></div>
+              <ul class="rows" id="wealth-rows"></ul>
+              <p class="note">Selon l'épargne : précaire sous 100 €, aisé au-delà de 1 500 €, riche au-delà de 6 000 €. La précarité et le chômage poussent à la délinquance.</p>
+            </div>
+
+            <div class="card">
+              <div class="card__head">
+                <h3>Évolution</h3>
+                <ul class="chips" id="wealth-chart-legend"></ul>
+              </div>
+              <div class="chart">
+                <canvas id="wealth-chart" aria-label="Répartition des habitants par niveau de vie au fil du temps"></canvas>
+                <div class="chart__tooltip" id="wealth-chart-tooltip" hidden></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>Flux</h3>
+              <ul class="rows">
+                <li>Salaire moyen<b id="ecstat-wage">—</b></li>
+                <li>Salaires versés (dernier jour)<b id="ecstat-wages">0 €</b></li>
+                <li>Aides sociales versées<b id="ecstat-welfare">0 €</b></li>
+                <li>Pensions versées<b id="ecstat-pensions">0 €</b></li>
+                <li>Chiffre d'affaires aujourd'hui<b id="ecstat-today">0 €</b></li>
+                <li>Caisses des commerces<b id="ecstat-tills">0 €</b></li>
+                <li>Coffres des banques<b id="ecstat-vaults">0 €</b></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Crime · Réglages -->
+          <div class="subpanel" id="sub-crime-settings" role="tabpanel" aria-labelledby="sub-btn-crime-settings" hidden>
+            <div class="card">
+              <h3>Société</h3>
+              <label class="control" for="crslider-criminality">
+                <span class="control__row"><span>Criminalité</span><output id="crvalue-criminality">25 %</output></span>
+                <input type="range" id="crslider-criminality">
+                <span class="control__help">Tendance de fond. Chacun y est plus ou moins porté selon son civisme, puis la précarité et le chômage multiplient le risque.</span>
+              </label>
+              <label class="control" for="crslider-unemployment">
+                <span class="control__row"><span>Chômage</span><output id="crvalue-unemployment">8 %</output></span>
+                <input type="range" id="crslider-unemployment">
+                <span class="control__help">Part des actifs sans emploi : ils ne vont plus au bureau, vivent des aides… et ont le temps de cambrioler.</span>
+              </label>
+              <label class="control" for="crslider-welfare">
+                <span class="control__row"><span>Aides sociales</span><output id="crvalue-welfare">50 %</output></span>
+                <input type="range" id="crslider-welfare">
+                <span class="control__help">Revenu des chômeurs et étudiants. Plus elles sont généreuses, moins on vole par nécessité.</span>
+              </label>
+              <label class="control" for="crslider-wages">
+                <span class="control__row"><span>Salaires</span><output id="crvalue-wages">100 %</output></span>
+                <input type="range" id="crslider-wages">
+                <span class="control__help">Niveau des salaires : moins de ménages à sec, plus de dépenses dans les commerces.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Sécurité</h3>
+              <label class="control" for="crslider-patrols">
+                <span class="control__row"><span>Patrouilles de police</span><output id="crvalue-patrols">4</output></span>
+                <input type="range" id="crslider-patrols">
+                <span class="control__help">Elles sillonnent les points chauds, dissuadent, foncent sur les alarmes et interpellent les suspects recherchés.</span>
+              </label>
+              <label class="control" for="crslider-lighting">
+                <span class="control__row"><span>Éclairage public</span><output id="crvalue-lighting">50 %</output></span>
+                <input type="range" id="crslider-lighting">
+                <span class="control__help">La nuit : moins de rôdeurs, moins d'agressions, et les caméras voient mieux.</span>
+              </label>
+              <label class="control" for="crslider-cameras">
+                <span class="control__row"><span>Vidéosurveillance</span><output id="crvalue-cameras">20 %</output></span>
+                <input type="range" id="crslider-cameras">
+                <span class="control__help">Chance d'identifier l'auteur d'un délit : il devient recherché, et finit souvent interpellé.</span>
+              </label>
+              <label class="control" for="crslider-sentence">
+                <span class="control__row"><span>Sévérité des peines</span><output id="crvalue-sentence">2 j</output></span>
+                <input type="range" id="crslider-sentence">
+                <span class="control__help">Durée de prison (triplée pour un braqueur). Avec la récidive, la prison peut aussi endurcir.</span>
+              </label>
+              <label class="control" for="crslider-bankSecurity">
+                <span class="control__row"><span>Sécurité des banques</span><output id="crvalue-bankSecurity">60 %</output></span>
+                <input type="range" id="crslider-bankSecurity">
+                <span class="control__help">Vigiles, sas et coffres : un braquage de banque a d'autant moins de chances de réussir.</span>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>Règles</h3>
+              <label class="switch"><input type="checkbox" id="crtoggle-bankHeists"><span class="switch__track"></span>Braquages de banque<span class="switch__help">Des gangs de 3 à 5 délinquants violents tentent leur chance, armés</span></label>
+              <label class="switch"><input type="checkbox" id="crtoggle-neighborhoodWatch"><span class="switch__track"></span>Voisins vigilants<span class="switch__help">Un voisin présent peut surprendre un cambrioleur et appeler la police</span></label>
+              <label class="switch"><input type="checkbox" id="crtoggle-recidivism"><span class="switch__track"></span>Récidive<span class="switch__help">Un ancien détenu retombe plus facilement dans la délinquance</span></label>
+            </div>
           </div>
         </section>
 
